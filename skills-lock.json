@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "notion-design-skill": {
+      "source": "Hey-Viswa/-claude-design-system-skills",
+      "sourceType": "github",
+      "skillPath": "design_system_skills/notion-design-skill/SKILL.md",
+      "computedHash": "fdda6a5b2f80927bb93b11dba75841b69873c7c234533faf7f5e0af68e662f7d"
+    }
+  }
+}
