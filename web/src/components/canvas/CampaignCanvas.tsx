@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -14,21 +14,53 @@ import {
   type Connection,
   type Node,
 } from "@xyflow/react";
-import { campaignEdges, campaignNodes } from "./campaignBoard";
-import { nodeTypes, type BoardNodeData } from "./nodes/CanvasNodes";
-import type { InspectorSelection, NodeKind } from "@/lib/types";
+import {
+  buildBranchEdges,
+  buildBranchNodes,
+  buildOverviewEdges,
+  buildOverviewNodes,
+} from "./boardBuilders";
+import {
+  branchNodeTypes,
+  overviewNodeTypes,
+  type BoardNodeData,
+  type DepartmentNodeData,
+  type ItemNodeData,
+} from "./nodes/CanvasNodes";
+import type { DepartmentId, InspectorSelection } from "@/lib/types";
 
 type Props = {
-  onSelect: (selection: InspectorSelection) => void;
+  mode: "overview" | "branch";
+  departmentId?: DepartmentId;
   tool: string;
+  onSelect: (selection: InspectorSelection) => void;
+  onOpenDepartment: (id: DepartmentId) => void;
 };
 
-let noteCounter = 0;
+let placeCounter = 0;
 
-export function CampaignCanvas({ onSelect, tool }: Props) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(campaignNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(campaignEdges);
-  const { screenToFlowPosition } = useReactFlow();
+export function CampaignCanvas({ mode, departmentId, tool, onSelect, onOpenDepartment }: Props) {
+  const initialNodes = useMemo(
+    () =>
+      mode === "overview" ? buildOverviewNodes() : buildBranchNodes(departmentId ?? "creative"),
+    [mode, departmentId],
+  );
+  const initialEdges = useMemo(
+    () =>
+      mode === "overview" ? buildOverviewEdges() : buildBranchEdges(departmentId ?? "creative"),
+    [mode, departmentId],
+  );
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const { screenToFlowPosition, fitView } = useReactFlow();
+
+  useEffect(() => {
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+    const t = window.setTimeout(() => fitView({ padding: 0.18, duration: 280 }), 40);
+    return () => window.clearTimeout(t);
+  }, [initialNodes, initialEdges, setNodes, setEdges, fitView]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -48,73 +80,96 @@ export function CampaignCanvas({ onSelect, tool }: Props) {
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node<BoardNodeData>) => {
-      onSelect({
-        type: "node",
-        id: node.id,
-        kind: node.data.kind,
-        title: node.data.title,
-        subtitle: node.data.subtitle,
-      });
-    },
-    [onSelect],
-  );
-
-  const onPaneClick = useCallback(
-    (event: React.MouseEvent) => {
-      const placeable = ["comment", "note", "blocker", "agent", "asset"];
-      if (placeable.includes(tool)) {
-        noteCounter += 1;
-        const id = `${tool}-${noteCounter}`;
-        const kind = (tool === "asset" ? "asset" : tool) as NodeKind;
-        const position = screenToFlowPosition({
-          x: event.clientX,
-          y: event.clientY,
-        });
-
-        const titles: Record<string, string> = {
-          comment: "New comment",
-          note: "Untitled note",
-          blocker: "New blocker",
-          agent: "Agent pin",
-          asset: "New asset",
-        };
-
-        const newNode: Node<BoardNodeData> = {
-          id,
-          type: kind,
-          position,
-          data: {
-            kind,
-            title: titles[tool] ?? "Item",
-            subtitle:
-              tool === "comment"
-                ? "You · just now"
-                : tool === "agent"
-                  ? "Idle · waiting for task"
-                  : tool === "asset"
-                    ? "Draft · unassigned"
-                    : undefined,
-            tone: tool === "blocker" ? "danger" : tool === "agent" ? "info" : "neutral",
-            agentStatus: tool === "agent" ? "idle" : undefined,
-          },
-        };
-
-        setNodes((nds) => [...nds, newNode]);
+      if (node.data.kind === "department") {
+        const data = node.data as DepartmentNodeData;
         onSelect({
-          type: "node",
-          id,
-          kind,
-          title: newNode.data.title,
-          subtitle: newNode.data.subtitle,
+          type: "department",
+          id: node.id as DepartmentId,
+          title: data.title,
+          subtitle: data.summary,
         });
         return;
       }
 
-      onSelect({ type: "none" });
+      const data = node.data as ItemNodeData;
+      onSelect({
+        type: "item",
+        id: node.id,
+        kind: data.kind,
+        title: data.title,
+        subtitle: data.body,
+        departmentId: departmentId ?? "creative",
+      });
     },
-    [onSelect, screenToFlowPosition, setNodes, tool],
+    [departmentId, onSelect],
   );
 
+  const onNodeDoubleClick = useCallback(
+    (_: React.MouseEvent, node: Node<BoardNodeData>) => {
+      if (mode === "overview" && node.data.kind === "department") {
+        onOpenDepartment(node.id as DepartmentId);
+      }
+    },
+    [mode, onOpenDepartment],
+  );
+
+  const onPaneClick = useCallback(
+    (event: React.MouseEvent) => {
+      if (mode !== "branch") {
+        onSelect({ type: "none" });
+        return;
+      }
+
+      const placeable = ["comment", "note", "blocker", "instruction", "work"];
+      if (!placeable.includes(tool)) {
+        onSelect({ type: "none" });
+        return;
+      }
+
+      placeCounter += 1;
+      const kind = tool as ItemNodeData["kind"];
+      const id = `${kind}-${placeCounter}`;
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const titles: Record<string, string> = {
+        comment: "New comment",
+        note: "Untitled note",
+        blocker: "New blocker",
+        instruction: "New instruction",
+        work: "New work item",
+      };
+
+      const newNode: Node<BoardNodeData> = {
+        id,
+        type: kind,
+        position,
+        data: {
+          kind,
+          title: titles[tool] ?? "Item",
+          authorName: "You",
+          authorKind: "human",
+          authorInitials: "MK",
+          meta: tool === "comment" ? "just now" : undefined,
+          tone: tool === "blocker" ? "danger" : "neutral",
+        },
+      };
+
+      setNodes((nds) => [...nds, newNode]);
+      onSelect({
+        type: "item",
+        id,
+        kind,
+        title: newNode.data.title,
+        departmentId: departmentId ?? "creative",
+      });
+    },
+    [departmentId, mode, onSelect, screenToFlowPosition, setNodes, tool],
+  );
+
+  const nodeTypes = mode === "overview" ? overviewNodeTypes : branchNodeTypes;
   const proOptions = useMemo(() => ({ hideAttribution: true }), []);
 
   return (
@@ -126,11 +181,12 @@ export function CampaignCanvas({ onSelect, tool }: Props) {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.18 }}
-        minZoom={0.35}
+        minZoom={0.3}
         maxZoom={1.6}
         defaultEdgeOptions={{ type: "smoothstep" }}
         proOptions={proOptions}
@@ -139,7 +195,11 @@ export function CampaignCanvas({ onSelect, tool }: Props) {
         panOnDrag={tool === "hand" ? true : tool === "select" ? [1, 2] : false}
         nodesDraggable={tool === "select"}
         nodesConnectable={tool === "connect" || tool === "select"}
-        className={placeableCursor(tool) ? "cursor-crosshair" : undefined}
+        className={
+          mode === "branch" && ["comment", "note", "blocker", "instruction", "work"].includes(tool)
+            ? "cursor-crosshair"
+            : undefined
+        }
       >
         <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="#d3d1cb" />
         <Controls showInteractive={false} position="bottom-left" />
@@ -151,9 +211,9 @@ export function CampaignCanvas({ onSelect, tool }: Props) {
           nodeColor={(n) => {
             const kind = (n.data as BoardNodeData | undefined)?.kind;
             if (kind === "blocker") return "#fdebec";
-            if (kind === "agent") return "#e1f3fe";
             if (kind === "comment") return "#fbf3db";
-            if (kind === "launch") return "#111111";
+            if (kind === "instruction") return "#e1f3fe";
+            if (kind === "department") return "#ffffff";
             return "#ffffff";
           }}
           maskColor="rgba(247,246,243,0.75)"
@@ -161,8 +221,4 @@ export function CampaignCanvas({ onSelect, tool }: Props) {
       </ReactFlow>
     </div>
   );
-}
-
-function placeableCursor(tool: string) {
-  return ["comment", "note", "blocker", "agent", "asset"].includes(tool);
 }

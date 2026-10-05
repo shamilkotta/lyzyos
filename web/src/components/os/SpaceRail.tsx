@@ -1,6 +1,6 @@
 "use client";
 
-import { House, SquaresFour, Books, Robot, GearSix, Plus } from "@phosphor-icons/react";
+import { House, SquaresFour, Books, Users, GearSix, Plus } from "@phosphor-icons/react";
 import clsx from "clsx";
 
 type RailId = "home" | "spaces" | "knowledge" | "agents" | "settings";
@@ -15,7 +15,7 @@ const items: { id: RailId; label: string; icon: typeof House }[] = [
   { id: "home", label: "Home", icon: House },
   { id: "spaces", label: "Spaces", icon: SquaresFour },
   { id: "knowledge", label: "Knowledge", icon: Books },
-  { id: "agents", label: "Agents", icon: Robot },
+  { id: "agents", label: "Team", icon: Users },
   { id: "settings", label: "Settings", icon: GearSix },
 ];
 

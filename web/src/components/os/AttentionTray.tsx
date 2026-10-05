@@ -1,7 +1,7 @@
 "use client";
 
 import { WarningCircle, X } from "@phosphor-icons/react";
-import { attentionQueue } from "@/lib/data";
+import { attentionQueue, getDepartment } from "@/lib/data";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { AttentionItem } from "@/lib/types";
 
@@ -40,7 +40,9 @@ export function AttentionTray({ open, onClose, onSelect }: Props) {
               className="w-full px-3 py-3 text-left transition-colors hover:bg-surface-soft"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[12px] text-ink-tertiary">{item.campaignName}</span>
+                <span className="text-[12px] text-ink-tertiary">
+                  {item.campaignName} · {getDepartment(item.departmentId).name}
+                </span>
                 <StatusBadge
                   tone={item.tone === "danger" ? "danger" : item.tone === "warn" ? "warn" : "info"}
                 >

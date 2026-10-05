@@ -6,20 +6,24 @@ import clsx from "clsx";
 
 type Props = {
   spaceName?: string;
+  departmentName?: string;
   onCommand: () => void;
   onToggleAttention: () => void;
   attentionCount: number;
   view: "home" | "campaign";
   onHome: () => void;
+  onBackToOverview?: () => void;
 };
 
 export function MenuBar({
   spaceName,
+  departmentName,
   onCommand,
   onToggleAttention,
   attentionCount,
   view,
   onHome,
+  onBackToOverview,
 }: Props) {
   return (
     <header className="relative z-20 flex h-[var(--menubar-h)] shrink-0 items-center justify-between border-b border-border bg-surface/90 px-3 backdrop-blur-md">
@@ -40,7 +44,26 @@ export function MenuBar({
         {view === "campaign" && spaceName ? (
           <>
             <CaretRight size={12} className="text-ink-tertiary" />
-            <span className="truncate text-[13px] text-ink-secondary">{spaceName}</span>
+            <button
+              type="button"
+              onClick={onBackToOverview}
+              className={clsx(
+                "truncate text-[13px]",
+                departmentName
+                  ? "text-ink-secondary hover:text-ink"
+                  : "text-ink-secondary cursor-default",
+              )}
+              disabled={!departmentName}
+            >
+              {spaceName}
+            </button>
+          </>
+        ) : null}
+
+        {view === "campaign" && departmentName ? (
+          <>
+            <CaretRight size={12} className="text-ink-tertiary" />
+            <span className="truncate text-[13px] text-ink">{departmentName}</span>
           </>
         ) : null}
       </div>
@@ -72,7 +95,7 @@ export function MenuBar({
           ) : null}
         </button>
 
-        <div className="ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-pale-blue text-[11px] font-medium text-pale-blue-ink">
+        <div className="ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-canvas text-[11px] font-medium text-ink">
           MK
         </div>
       </div>

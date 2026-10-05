@@ -1,18 +1,19 @@
 "use client";
 
-import { ArrowRight, CirclesFour, DotOutline } from "@phosphor-icons/react";
-import { spaces, attentionQueue, agents } from "@/lib/data";
+import { CirclesFour, DotOutline } from "@phosphor-icons/react";
+import { spaces, attentionQueue, members, getDepartment } from "@/lib/data";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { Button } from "@/components/ui/Button";
+import { KickoffComposer } from "./KickoffComposer";
 import clsx from "clsx";
 
 type Props = {
   onOpenSpace: (id: string) => void;
-  onNewSpace: () => void;
+  onCreated: () => void;
+  kickoffFocusToken?: number;
   rail: "home" | "spaces" | "knowledge" | "agents" | "settings";
 };
 
-export function HomeDesktop({ onOpenSpace, onNewSpace, rail }: Props) {
+export function HomeDesktop({ onOpenSpace, onCreated, kickoffFocusToken, rail }: Props) {
   if (rail === "knowledge") return <KnowledgeSurface />;
   if (rail === "agents") return <AgentsSurface />;
   if (rail === "settings") return <SettingsSurface />;
@@ -29,7 +30,7 @@ export function HomeDesktop({ onOpenSpace, onNewSpace, rail }: Props) {
       />
 
       <div className="relative z-10 mx-auto max-w-5xl px-8 py-12">
-        <header className="mb-10 fade-up">
+        <header className="mb-6 fade-up">
           <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-tertiary">
             Marketing operations desk
           </p>
@@ -37,17 +38,14 @@ export function HomeDesktop({ onOpenSpace, onNewSpace, rail }: Props) {
             Workbench
           </h1>
           <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-secondary">
-            Open a campaign space. Agents work on the board with you — drag assets, leave comments,
-            resolve blockers, decide what ships.
+            Open a campaign graph. Departments are rooms. People and agents work inside those rooms
+            together — comments, notes, assets, decisions.
           </p>
-          <div className="mt-5 flex items-center gap-2">
-            <Button onClick={onNewSpace}>New from brief</Button>
-            <Button variant="secondary" onClick={() => onOpenSpace("secureedge")}>
-              Resume SecureEdge
-              <ArrowRight size={14} weight="bold" />
-            </Button>
-          </div>
         </header>
+
+        <div className="mb-10">
+          <KickoffComposer onCreated={onCreated} focusToken={kickoffFocusToken} />
+        </div>
 
         <section className="mb-10">
           <div className="mb-3 flex items-baseline justify-between">
@@ -152,30 +150,41 @@ export function HomeDesktop({ onOpenSpace, onNewSpace, rail }: Props) {
 
           <div>
             <h2 className="mb-3 text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-              Agents online
+              Team on campaigns
             </h2>
             <ul className="rounded-[12px] border border-border bg-surface">
-              {agents.map((agent) => (
-                <li
-                  key={agent.id}
-                  className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 last:border-0"
-                >
-                  <div>
-                    <p className="text-[13px] font-medium text-ink">{agent.name}</p>
-                    <p className="text-[12px] text-ink-secondary">{agent.lastAction}</p>
-                  </div>
-                  <span
-                    className={clsx(
-                      "h-1.5 w-1.5 shrink-0 rounded-full",
-                      agent.status === "working"
-                        ? "bg-pale-green-ink"
-                        : agent.status === "waiting"
-                          ? "bg-pale-yellow-ink"
-                          : "bg-ink-tertiary",
-                    )}
-                  />
-                </li>
-              ))}
+              {members
+                .filter((m) => m.status !== "away")
+                .slice(0, 6)
+                .map((member) => (
+                  <li
+                    key={member.id}
+                    className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 last:border-0"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={clsx(
+                          "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-medium",
+                          member.kind === "agent"
+                            ? "bg-pale-blue text-pale-blue-ink"
+                            : "bg-canvas text-ink",
+                        )}
+                      >
+                        {member.initials}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium text-ink">{member.name}</p>
+                        <p className="truncate text-[12px] text-ink-secondary">{member.role}</p>
+                      </div>
+                    </div>
+                    <span
+                      className={clsx(
+                        "h-1.5 w-1.5 shrink-0 rounded-full",
+                        member.status === "working" ? "bg-pale-green-ink" : "bg-ink-tertiary",
+                      )}
+                    />
+                  </li>
+                ))}
             </ul>
           </div>
         </section>
@@ -236,27 +245,40 @@ function KnowledgeSurface() {
 function AgentsSurface() {
   return (
     <div className="mx-auto max-w-3xl px-8 py-12 fade-up">
-      <h1 className="font-serif text-[32px] tracking-[-0.03em] text-ink">Agents</h1>
+      <h1 className="font-serif text-[32px] tracking-[-0.03em] text-ink">Team</h1>
       <p className="mt-2 text-[14px] text-ink-secondary">
-        Roles that execute work. Humans keep decisions and publish rights.
+        Humans and agents are teammates. Same rooms, same board objects — different permissions.
       </p>
       <ul className="mt-8 rounded-[12px] border border-border bg-surface">
-        {agents.map((agent) => (
+        {members.map((member) => (
           <li
-            key={agent.id}
+            key={member.id}
             className="flex items-start justify-between gap-4 border-b border-border px-4 py-4 last:border-0"
           >
-            <div>
-              <p className="text-[14px] font-medium text-ink">{agent.name}</p>
-              <p className="mt-0.5 text-[12px] text-ink-secondary">{agent.role}</p>
-              <p className="mt-2 text-[13px] text-ink-secondary">{agent.lastAction}</p>
+            <div className="flex min-w-0 items-start gap-3">
+              <span
+                className={clsx(
+                  "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-medium",
+                  member.kind === "agent"
+                    ? "bg-pale-blue text-pale-blue-ink"
+                    : "bg-canvas text-ink",
+                )}
+              >
+                {member.initials}
+              </span>
+              <div>
+                <p className="text-[14px] font-medium text-ink">{member.name}</p>
+                <p className="mt-0.5 text-[12px] text-ink-secondary">
+                  {member.role}
+                  {member.kind === "agent" ? " · Agent" : " · Human"}
+                </p>
+                <p className="mt-2 text-[12px] text-ink-tertiary">
+                  {member.departmentIds.map((id) => getDepartment(id).name).join(" · ")}
+                </p>
+              </div>
             </div>
-            <StatusBadge
-              tone={
-                agent.status === "working" ? "ok" : agent.status === "waiting" ? "warn" : "neutral"
-              }
-            >
-              {agent.status}
+            <StatusBadge tone={member.status === "working" ? "ok" : "neutral"}>
+              {member.status}
             </StatusBadge>
           </li>
         ))}
