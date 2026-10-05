@@ -10,6 +10,30 @@ import {
 import type { DepartmentId } from "@/lib/types";
 import type { BoardNodeData } from "./nodes/CanvasNodes";
 
+export function buildApiProjectOverviewNodes(projectName: string): Node<BoardNodeData>[] {
+  return [
+    {
+      id: "planning",
+      type: "department",
+      position: { x: 340, y: 280 },
+      data: {
+        kind: "department" as const,
+        title: "Planning",
+        summary: `${projectName} · intake and discovery with Lyzy`,
+        tone: "info",
+        status: "in_progress",
+        members: membersForDepartment("planning"),
+        attention: "Lyzy is structuring the brief",
+        openLabel: "Open",
+      },
+    },
+  ];
+}
+
+export function buildApiProjectOverviewEdges(): Edge[] {
+  return [];
+}
+
 export function buildOverviewNodes(): Node<BoardNodeData>[] {
   return departments.map((dept) => ({
     id: dept.id,

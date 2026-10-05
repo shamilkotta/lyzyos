@@ -1,7 +1,14 @@
 packages:
   - "web"
+  - "agent"
+  - "api"
   - "packages/*"
 
 allowBuilds:
+  "@mongodb-js/zstd": false
+  core-js-pure: false
+  esbuild: true
+  node-liblzma: false
   sharp: false
   unrs-resolver: false
+  workerd: true

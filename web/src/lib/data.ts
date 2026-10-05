@@ -7,7 +7,7 @@ import type {
   Member,
 } from "./types";
 
-export const PRODUCT_NAME = "Workbench";
+export const PRODUCT_NAME = "LyzyOS";
 
 export const spaces: CampaignSpace[] = [
   {

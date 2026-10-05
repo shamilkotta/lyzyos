@@ -44,3 +44,10 @@ next-env.d.ts
 # local agent / skill caches
 .agents/
 .pi/
+
+# wrangler
+.wrangler/
+.dev.vars
+**/.dev.vars
+agent/worker-configuration.d.ts
+api/worker-configuration.d.ts

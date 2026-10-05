@@ -10,8 +10,9 @@ type Props = {
   onCommand: () => void;
   onToggleAttention: () => void;
   attentionCount: number;
-  view: "home" | "campaign";
+  view: "home" | "campaign" | "planning";
   onHome: () => void;
+  /** Click project title in breadcrumb to return to project graph */
   onBackToOverview?: () => void;
 };
 
@@ -25,6 +26,8 @@ export function MenuBar({
   onHome,
   onBackToOverview,
 }: Props) {
+  const inProject = (view === "campaign" || view === "planning") && Boolean(spaceName);
+
   return (
     <header className="relative z-20 flex h-[var(--menubar-h)] shrink-0 items-center justify-between border-b border-border bg-surface/90 px-3 backdrop-blur-md">
       <div className="flex min-w-0 items-center gap-2">
@@ -41,19 +44,19 @@ export function MenuBar({
           </span>
         </button>
 
-        {view === "campaign" && spaceName ? (
+        {inProject ? (
           <>
-            <CaretRight size={12} className="text-ink-tertiary" />
+            <CaretRight size={12} className="shrink-0 text-ink-tertiary" />
             <button
               type="button"
               onClick={onBackToOverview}
               className={clsx(
                 "truncate text-[13px]",
-                departmentName
+                departmentName || view === "planning"
                   ? "text-ink-secondary hover:text-ink"
-                  : "text-ink-secondary cursor-default",
+                  : "cursor-default text-ink",
               )}
-              disabled={!departmentName}
+              disabled={!departmentName && view !== "planning"}
             >
               {spaceName}
             </button>
@@ -62,8 +65,15 @@ export function MenuBar({
 
         {view === "campaign" && departmentName ? (
           <>
-            <CaretRight size={12} className="text-ink-tertiary" />
+            <CaretRight size={12} className="shrink-0 text-ink-tertiary" />
             <span className="truncate text-[13px] text-ink">{departmentName}</span>
+          </>
+        ) : null}
+
+        {view === "planning" ? (
+          <>
+            <CaretRight size={12} className="shrink-0 text-ink-tertiary" />
+            <span className="truncate text-[13px] text-ink">Planning</span>
           </>
         ) : null}
       </div>

@@ -1,0 +1,33 @@
+{
+  "name": "@lyzyos/auth",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./server": "./src/server.ts",
+    "./auth": "./src/auth.ts"
+  },
+  "scripts": {
+    "lint": "oxlint .",
+    "check": "tsc --noEmit",
+    "auth:generate": "pnpm dlx auth@latest generate --config ./src/auth.ts --output ../db/src/auth-schema.ts --adapter drizzle --dialect sqlite -y"
+  },
+  "dependencies": {
+    "@lyzyos/db": "workspace:*",
+    "better-auth": "^1.7.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261004.1",
+    "@types/node": "^20",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}

@@ -4,32 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Paperclip, FileText, X, SpinnerGap } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { createProject } from "@/lib/api";
+import { PROJECT_DOC_ACCEPT, filterAllowedProjectDocs } from "@/lib/docs";
 import clsx from "clsx";
 
 type Attachment = {
   id: string;
   name: string;
   sizeLabel: string;
+  file: File;
 };
 
 type Props = {
-  onCreated: () => void;
+  onCreated: (projectId: string, projectName: string) => void;
   focusToken?: number;
 };
-
-const extracted = [
-  { label: "Objective", value: "Enterprise awareness + qualified pipeline" },
-  { label: "Audience", value: "CTOs · CISOs · Security Directors" },
-  { label: "Markets", value: "US · UK · Germany" },
-  { label: "Channels", value: "LinkedIn · Google Ads · Email · Landing page" },
-  { label: "Launch", value: "November 10" },
-];
-
-const missing = [
-  "Approved product claims",
-  "Pricing / CTA destination",
-  "Germany legal disclaimer",
-];
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -40,7 +29,10 @@ function formatSize(bytes: number) {
 export function KickoffComposer({ onCreated, focusToken }: Props) {
   const [brief, setBrief] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [phase, setPhase] = useState<"compose" | "analyzing" | "review">("compose");
+  const [phase, setPhase] = useState<"compose" | "analyzing" | "ready">("compose");
+  const [error, setError] = useState<string | null>(null);
+  const [createdName, setCreatedName] = useState("");
+  const [createdId, setCreatedId] = useState("");
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -53,10 +45,21 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
   }, [focusToken]);
 
   const addFiles = (files: FileList | File[]) => {
-    const next = Array.from(files).map((file) => ({
+    const allowed = filterAllowedProjectDocs(files);
+    if (allowed.length === 0) {
+      setError("Only images and PDFs are supported.");
+      return;
+    }
+    if (allowed.length < Array.from(files).length) {
+      setError("Some files were skipped — only images and PDFs are supported.");
+    } else {
+      setError(null);
+    }
+    const next = allowed.map((file) => ({
       id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
       name: file.name,
       sizeLabel: formatSize(file.size),
+      file,
     }));
     setAttachments((prev) => {
       const names = new Set(prev.map((p) => p.name));
@@ -66,44 +69,62 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
 
   const canSubmit = brief.trim().length > 0 || attachments.length > 0;
 
-  const submit = () => {
+  const submit = async () => {
     if (!canSubmit || phase !== "compose") return;
     setPhase("analyzing");
-    window.setTimeout(() => setPhase("review"), 1100);
+    setError(null);
+    try {
+      const result = await createProject({
+        brief: brief.trim(),
+        files: attachments.map((a) => a.file),
+      });
+      setCreatedId(result.projectId);
+      setCreatedName(result.project?.name ?? "Untitled project");
+      setPhase("ready");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start project.");
+      setPhase("compose");
+    }
   };
 
   const reset = () => {
     setPhase("compose");
     setBrief("");
     setAttachments([]);
+    setError(null);
+    setCreatedId("");
+    setCreatedName("");
   };
 
   return (
     <div ref={rootRef} className="fade-up space-y-3">
+      {error ? (
+        <div className="rounded-[8px] border border-pale-red-ink/20 bg-pale-red px-3 py-2 text-[13px] text-pale-red-ink">
+          {error}
+        </div>
+      ) : null}
+
       {phase === "analyzing" ? (
         <div className="rounded-[12px] border border-border bg-surface px-4 py-8 text-center">
           <SpinnerGap size={22} weight="bold" className="mx-auto animate-spin text-ink-tertiary" />
-          <p className="mt-3 text-[14px] font-medium text-ink">Reading the brief…</p>
+          <p className="mt-3 text-[14px] font-medium text-ink">Saving intake…</p>
           <p className="mt-1 text-[13px] text-ink-secondary">
-            Campaign Manager is extracting objectives, audiences, markets, and gaps
-            {attachments.length > 0
-              ? ` from your note and ${attachments.length} document${attachments.length > 1 ? "s" : ""}`
-              : ""}
-            .
+            Storing brief and documents, then waking Lyzy for this project.
           </p>
         </div>
       ) : null}
 
-      {phase === "review" ? (
+      {phase === "ready" ? (
         <div className="rounded-[12px] border border-border bg-surface p-4">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <StatusBadge tone="info">Structured</StatusBadge>
+              <StatusBadge tone="info">Project created</StatusBadge>
               <h2 className="mt-2 text-[18px] font-medium tracking-[-0.02em] text-ink">
-                SecureEdge Enterprise Launch
+                {createdName}
               </h2>
               <p className="mt-1 text-[12px] text-ink-secondary">
-                Campaign Manager drafted the intake graph. Confirm gaps before opening the space.
+                Lyzy is reading the brief in the background. Open the project graph, then enter
+                Planning.
               </p>
             </div>
             <button
@@ -111,60 +132,15 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
               onClick={reset}
               className="text-[12px] font-medium text-ink-secondary hover:text-ink"
             >
-              Edit
+              New
             </button>
           </div>
 
-          {attachments.length > 0 ? (
-            <div className="mb-4 flex flex-wrap gap-1.5">
-              {attachments.map((file) => (
-                <span
-                  key={file.id}
-                  className="inline-flex items-center gap-1.5 rounded-[6px] border border-border bg-canvas px-2 py-1 text-[11px] text-ink-secondary"
-                >
-                  <FileText size={12} weight="bold" />
-                  {file.name}
-                </span>
-              ))}
-            </div>
-          ) : null}
-
-          <dl className="grid gap-2 sm:grid-cols-2">
-            {extracted.map((row) => (
-              <div key={row.label} className="rounded-[8px] border border-border px-3 py-2.5">
-                <dt className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-                  {row.label}
-                </dt>
-                <dd className="mt-1 text-[13px] text-ink">{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-
-          <div className="mt-4 rounded-[8px] border border-pale-yellow-ink/20 bg-pale-yellow px-3 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-pale-yellow-ink">
-              Needs your input
-            </p>
-            <ul className="mt-2 space-y-1.5">
-              {missing.map((item) => (
-                <li key={item} className="text-[13px] text-ink">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={reset}>
-              Keep editing
+              Stay on home
             </Button>
-            <Button
-              onClick={() => {
-                reset();
-                onCreated();
-              }}
-            >
-              Open workspace
-            </Button>
+            <Button onClick={() => onCreated(createdId, createdName)}>Open project</Button>
           </div>
         </div>
       ) : null}
@@ -196,7 +172,7 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
           <div className="border-b border-border px-3 py-2.5">
             <p className="text-[12px] font-medium text-ink">Kick off with the team</p>
             <p className="text-[12px] text-ink-secondary">
-              Describe the work or drop briefs — Campaign Manager will structure intake.
+              Describe the work or drop briefs — each kickoff creates a new project and agent.
             </p>
           </div>
 
@@ -209,7 +185,7 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
-                  submit();
+                  void submit();
                 }
               }}
               placeholder="Launch SecureEdge across US, UK and Germany for enterprise CTOs…"
@@ -249,7 +225,7 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
                 type="file"
                 multiple
                 className="hidden"
-                accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.ppt,.pptx"
+                accept={PROJECT_DOC_ACCEPT}
                 onChange={(e) => {
                   if (e.target.files?.length) addFiles(e.target.files);
                   e.target.value = "";
@@ -269,7 +245,7 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
                 </span>
               ) : (
                 <span className="hidden text-[11px] text-ink-tertiary sm:inline">
-                  Drop docs here · ⌘↵ to send
+                  Images or PDFs · ⌘↵ to send
                 </span>
               )}
             </div>
@@ -277,7 +253,7 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
             <button
               type="button"
               disabled={!canSubmit}
-              onClick={submit}
+              onClick={() => void submit()}
               className={clsx(
                 "flex h-8 items-center gap-1.5 rounded-[6px] px-3 text-[12px] font-medium transition-all duration-200 active:scale-[0.98]",
                 canSubmit

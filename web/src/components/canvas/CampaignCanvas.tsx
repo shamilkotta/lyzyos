@@ -15,6 +15,8 @@ import {
   type Node,
 } from "@xyflow/react";
 import {
+  buildApiProjectOverviewEdges,
+  buildApiProjectOverviewNodes,
   buildBranchEdges,
   buildBranchNodes,
   buildOverviewEdges,
@@ -35,20 +37,40 @@ type Props = {
   tool: string;
   onSelect: (selection: InspectorSelection) => void;
   onOpenDepartment: (id: DepartmentId) => void;
+  apiProjectName?: string;
+  onOpenPlanning?: () => void;
 };
 
 let placeCounter = 0;
 
-export function CampaignCanvas({ mode, departmentId, tool, onSelect, onOpenDepartment }: Props) {
+export function CampaignCanvas({
+  mode,
+  departmentId,
+  tool,
+  onSelect,
+  onOpenDepartment,
+  apiProjectName,
+  onOpenPlanning,
+}: Props) {
+  const apiOverview = apiProjectName != null && apiProjectName.length > 0;
+
   const initialNodes = useMemo(
     () =>
-      mode === "overview" ? buildOverviewNodes() : buildBranchNodes(departmentId ?? "creative"),
-    [mode, departmentId],
+      mode === "overview"
+        ? apiOverview
+          ? buildApiProjectOverviewNodes(apiProjectName)
+          : buildOverviewNodes()
+        : buildBranchNodes(departmentId ?? "creative"),
+    [mode, departmentId, apiOverview, apiProjectName],
   );
   const initialEdges = useMemo(
     () =>
-      mode === "overview" ? buildOverviewEdges() : buildBranchEdges(departmentId ?? "creative"),
-    [mode, departmentId],
+      mode === "overview"
+        ? apiOverview
+          ? buildApiProjectOverviewEdges()
+          : buildOverviewEdges()
+        : buildBranchEdges(departmentId ?? "creative"),
+    [mode, departmentId, apiOverview],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -79,9 +101,18 @@ export function CampaignCanvas({ mode, departmentId, tool, onSelect, onOpenDepar
   );
 
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node<BoardNodeData>) => {
+    (event: React.MouseEvent, node: Node<BoardNodeData>) => {
       if (node.data.kind === "department") {
         const data = node.data as DepartmentNodeData;
+        const openHit = (event.target as HTMLElement | null)?.closest?.("[data-open-workspace]");
+        if (openHit) {
+          if (apiOverview && node.id === "planning" && onOpenPlanning) {
+            onOpenPlanning();
+            return;
+          }
+          onOpenDepartment(node.id as DepartmentId);
+          return;
+        }
         onSelect({
           type: "department",
           id: node.id as DepartmentId,
@@ -101,16 +132,20 @@ export function CampaignCanvas({ mode, departmentId, tool, onSelect, onOpenDepar
         departmentId: departmentId ?? "creative",
       });
     },
-    [departmentId, onSelect],
+    [departmentId, onSelect, apiOverview, onOpenPlanning, onOpenDepartment],
   );
 
   const onNodeDoubleClick = useCallback(
     (_: React.MouseEvent, node: Node<BoardNodeData>) => {
       if (mode === "overview" && node.data.kind === "department") {
+        if (apiOverview && node.id === "planning" && onOpenPlanning) {
+          onOpenPlanning();
+          return;
+        }
         onOpenDepartment(node.id as DepartmentId);
       }
     },
-    [mode, onOpenDepartment],
+    [mode, onOpenDepartment, apiOverview, onOpenPlanning],
   );
 
   const onPaneClick = useCallback(
