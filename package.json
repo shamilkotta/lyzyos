@@ -1,5 +1,5 @@
 {
-  "name": "lzr",
+  "name": "lyzyos",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,11 @@
     "lint:fix": "pnpm -r --if-present lint -- --fix",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "web": "pnpm --filter web"
+    "web": "pnpm --filter web",
+    "agent": "pnpm --filter agent",
+    "api": "pnpm --filter api",
+    "auth:generate": "pnpm --filter @lyzyos/auth auth:generate",
+    "db:generate": "pnpm --filter @lyzyos/db generate"
   },
   "devDependencies": {
     "oxfmt": "^0.71.0",

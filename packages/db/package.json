@@ -1,0 +1,30 @@
+{
+  "name": "@lyzyos/db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./store": "./src/store.ts",
+    "./schema": "./src/schema.ts",
+    "./auth-schema": "./src/auth-schema.ts",
+    "./client": "./src/client.ts",
+    "./r2": "./src/r2.ts",
+    "./sync": "./src/sync.ts",
+    "./users": "./src/users.ts"
+  },
+  "scripts": {
+    "lint": "oxlint .",
+    "generate": "drizzle-kit generate",
+    "auth:generate": "pnpm --filter @lyzyos/auth auth:generate",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261004.1",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.9.3"
+  }
+}

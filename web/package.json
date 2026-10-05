@@ -9,8 +9,10 @@
     "lint": "oxlint ."
   },
   "dependencies": {
+    "@lyzyos/auth": "workspace:*",
     "@phosphor-icons/react": "^2.1.10",
     "@xyflow/react": "^12.12.0",
+    "agents": "0.26.0",
     "clsx": "^2.1.1",
     "next": "16.3.8",
     "react": "19.2.8",

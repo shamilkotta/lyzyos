@@ -19,7 +19,7 @@ const instrument = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Workbench — Agentic Marketing OS",
+  title: "LyzyOS — Agentic Marketing OS",
   description: "An agentic operating layer for marketing teams. Agents execute. Humans decide.",
 };
 

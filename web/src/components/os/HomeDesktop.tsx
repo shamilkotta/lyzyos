@@ -1,19 +1,29 @@
 "use client";
 
 import { CirclesFour, DotOutline } from "@phosphor-icons/react";
-import { spaces, attentionQueue, members, getDepartment } from "@/lib/data";
+import { PRODUCT_NAME, spaces, attentionQueue, members, getDepartment } from "@/lib/data";
+import type { Project } from "@/lib/project-types";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { KickoffComposer } from "./KickoffComposer";
 import clsx from "clsx";
 
 type Props = {
   onOpenSpace: (id: string) => void;
-  onCreated: () => void;
+  onOpenLiveProject: (id: string, name: string) => void;
+  onCreated: (projectId: string, projectName: string) => void;
   kickoffFocusToken?: number;
+  liveProjects: Project[];
   rail: "home" | "spaces" | "knowledge" | "agents" | "settings";
 };
 
-export function HomeDesktop({ onOpenSpace, onCreated, kickoffFocusToken, rail }: Props) {
+export function HomeDesktop({
+  onOpenSpace,
+  onOpenLiveProject,
+  onCreated,
+  kickoffFocusToken,
+  liveProjects,
+  rail,
+}: Props) {
   if (rail === "knowledge") return <KnowledgeSurface />;
   if (rail === "agents") return <AgentsSurface />;
   if (rail === "settings") return <SettingsSurface />;
@@ -35,7 +45,7 @@ export function HomeDesktop({ onOpenSpace, onCreated, kickoffFocusToken, rail }:
             Marketing operations desk
           </p>
           <h1 className="mt-2 font-serif text-[40px] leading-[1.05] tracking-[-0.035em] text-ink">
-            Workbench
+            {PRODUCT_NAME}
           </h1>
           <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-secondary">
             Open a campaign graph. Departments are rooms. People and agents work inside those rooms
@@ -47,10 +57,59 @@ export function HomeDesktop({ onOpenSpace, onCreated, kickoffFocusToken, rail }:
           <KickoffComposer onCreated={onCreated} focusToken={kickoffFocusToken} />
         </div>
 
+        {liveProjects.length > 0 ? (
+          <section className="mb-10">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
+                Recents
+              </h2>
+              <span className="font-mono text-[11px] text-ink-tertiary">
+                {liveProjects.length} live
+              </span>
+            </div>
+            <div className="stagger grid gap-3 md:grid-cols-3">
+              {liveProjects.map((project, index) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => onOpenLiveProject(project.id, project.name)}
+                  className={clsx(
+                    "group rounded-[12px] border border-border bg-surface p-4 text-left transition-[box-shadow,border-color,transform] duration-200",
+                    "hover:border-border-strong hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-[0.99]",
+                  )}
+                  style={{ ["--index" as string]: index }}
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-canvas text-ink">
+                      <CirclesFour size={15} weight="bold" />
+                    </span>
+                    <StatusBadge tone={project.planningStatus === "in_progress" ? "info" : "ok"}>
+                      {project.planningStatus === "in_progress" ? "Planning" : "Ready"}
+                    </StatusBadge>
+                  </div>
+
+                  <SpacePreview panes={["bg-surface", "bg-pale-blue/70", "bg-pale-yellow/80"]} />
+
+                  <h3 className="text-[14px] font-medium tracking-[-0.01em] text-ink">
+                    {project.name}
+                  </h3>
+                  <p className="mt-1 text-[12px] text-ink-secondary">
+                    Live project · Planning desk
+                  </p>
+                  <div className="mt-3 flex items-center justify-between text-[12px] text-ink-tertiary">
+                    <span>Planning</span>
+                    <span className="font-mono">Live</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <section className="mb-10">
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-              Open spaces
+              Demo spaces
             </h2>
             <span className="font-mono text-[11px] text-ink-tertiary">{spaces.length} running</span>
           </div>
@@ -88,19 +147,7 @@ export function HomeDesktop({ onOpenSpace, onCreated, kickoffFocusToken, rail }:
                   </StatusBadge>
                 </div>
 
-                {/* faux window chrome */}
-                <div className="mb-3 overflow-hidden rounded-[8px] border border-border bg-canvas">
-                  <div className="flex h-6 items-center gap-1 border-b border-border bg-surface px-2">
-                    <DotOutline size={14} weight="fill" className="text-border-strong" />
-                    <DotOutline size={14} weight="fill" className="text-border-strong" />
-                    <DotOutline size={14} weight="fill" className="text-border-strong" />
-                  </div>
-                  <div className="grid h-20 grid-cols-3 gap-1.5 p-2">
-                    <div className="rounded-[4px] border border-border bg-surface" />
-                    <div className="rounded-[4px] border border-border bg-pale-yellow/80" />
-                    <div className="rounded-[4px] border border-border bg-pale-red/80" />
-                  </div>
-                </div>
+                <SpacePreview panes={["bg-surface", "bg-pale-yellow/80", "bg-pale-red/80"]} />
 
                 <h3 className="text-[14px] font-medium tracking-[-0.01em] text-ink">
                   {space.name}
@@ -188,6 +235,23 @@ export function HomeDesktop({ onOpenSpace, onCreated, kickoffFocusToken, rail }:
             </ul>
           </div>
         </section>
+      </div>
+    </div>
+  );
+}
+
+function SpacePreview({ panes }: { panes: [string, string, string] }) {
+  return (
+    <div className="mb-3 overflow-hidden rounded-[8px] border border-border bg-canvas">
+      <div className="flex h-6 items-center gap-1 border-b border-border bg-surface px-2">
+        <DotOutline size={14} weight="fill" className="text-border-strong" />
+        <DotOutline size={14} weight="fill" className="text-border-strong" />
+        <DotOutline size={14} weight="fill" className="text-border-strong" />
+      </div>
+      <div className="grid h-20 grid-cols-3 gap-1.5 p-2">
+        {panes.map((pane) => (
+          <div key={pane} className={clsx("rounded-[4px] border border-border", pane)} />
+        ))}
       </div>
     </div>
   );

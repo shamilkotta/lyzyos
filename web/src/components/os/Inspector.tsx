@@ -1,8 +1,10 @@
 "use client";
 
-import { X, Check, ArrowRight, Users } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
+import { Check, ArrowRight, Users } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { FloatingPanel } from "@/components/os/FloatingPanel";
 import { departments, getDepartment, issueDetail, membersForDepartment } from "@/lib/data";
 import type { DepartmentId, InspectorSelection, Member } from "@/lib/types";
 import clsx from "clsx";
@@ -17,6 +19,14 @@ type Props = {
   departmentId?: DepartmentId;
 };
 
+function inspectorTitle(selection: InspectorSelection, mode: Props["mode"]) {
+  if (selection.type === "department") return "Department";
+  if (selection.type === "item") return selection.kind;
+  if (selection.type === "member") return "Teammate";
+  if (selection.type === "attention") return "Attention";
+  return mode === "branch" ? "Workspace" : "Inspector";
+}
+
 export function Inspector({
   selection,
   open,
@@ -26,43 +36,51 @@ export function Inspector({
   mode,
   departmentId,
 }: Props) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  const selectionKey =
+    selection.type === "none"
+      ? "none"
+      : selection.type === "department"
+        ? selection.id
+        : selection.type === "item"
+          ? selection.id
+          : selection.type === "member"
+            ? selection.member.id
+            : selection.item.id;
+
+  useEffect(() => {
+    if (selectionKey !== "none") setCollapsed(false);
+  }, [selectionKey]);
+
   if (!open) return null;
 
   return (
-    <aside className="relative z-20 flex w-[var(--inspector-w)] shrink-0 flex-col border-l border-border bg-surface">
-      <div className="flex h-11 items-center justify-between border-b border-border px-3">
-        <span className="text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-          Inspector
-        </span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-7 w-7 items-center justify-center rounded-[6px] text-ink-tertiary hover:bg-surface-soft hover:text-ink"
-        >
-          <X size={14} weight="bold" />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-3 py-4">
-        {selection.type === "none" && mode === "overview" ? <CampaignPulse /> : null}
-        {selection.type === "none" && mode === "branch" && departmentId ? (
-          <DepartmentPulse id={departmentId} />
-        ) : null}
-        {selection.type === "department" ? (
-          <DepartmentDetail id={selection.id} onOpen={() => onOpenDepartment?.(selection.id)} />
-        ) : null}
-        {selection.type === "item" ? (
-          <ItemDetail selection={selection} onApplyFix={onApplyFix} />
-        ) : null}
-        {selection.type === "member" ? <MemberDetail member={selection.member} /> : null}
-        {selection.type === "attention" ? (
-          <AttentionDetail
-            item={selection.item}
-            onOpen={() => onOpenDepartment?.(selection.item.departmentId)}
-          />
-        ) : null}
-      </div>
-    </aside>
+    <FloatingPanel
+      title={inspectorTitle(selection, mode)}
+      subtitle="Details"
+      collapsed={collapsed}
+      onCollapsedChange={setCollapsed}
+      onClose={onClose}
+    >
+      {selection.type === "none" && mode === "overview" ? <CampaignPulse /> : null}
+      {selection.type === "none" && mode === "branch" && departmentId ? (
+        <DepartmentPulse id={departmentId} />
+      ) : null}
+      {selection.type === "department" ? (
+        <DepartmentDetail id={selection.id} onOpen={() => onOpenDepartment?.(selection.id)} />
+      ) : null}
+      {selection.type === "item" ? (
+        <ItemDetail selection={selection} onApplyFix={onApplyFix} />
+      ) : null}
+      {selection.type === "member" ? <MemberDetail member={selection.member} /> : null}
+      {selection.type === "attention" ? (
+        <AttentionDetail
+          item={selection.item}
+          onOpen={() => onOpenDepartment?.(selection.item.departmentId)}
+        />
+      ) : null}
+    </FloatingPanel>
   );
 }
 
