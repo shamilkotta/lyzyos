@@ -6,8 +6,8 @@ import {
   ChatCircleText,
   NoteBlank,
   WarningCircle,
-  Robot,
-  Cube,
+  ListChecks,
+  Path,
   LinkSimple,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
@@ -15,37 +15,43 @@ import clsx from "clsx";
 export type CanvasTool =
   | "select"
   | "hand"
+  | "connect"
   | "comment"
   | "note"
-  | "blocker"
-  | "agent"
-  | "asset"
-  | "connect";
+  | "instruction"
+  | "work"
+  | "blocker";
 
 type Props = {
   tool: CanvasTool;
   onTool: (tool: CanvasTool) => void;
+  /** Overview mode only needs navigation tools */
+  mode: "overview" | "branch";
 };
 
-const tools: { id: CanvasTool; label: string; icon: typeof Cursor }[] = [
+const branchTools: { id: CanvasTool; label: string; icon: typeof Cursor }[] = [
   { id: "select", label: "Select", icon: Cursor },
   { id: "hand", label: "Pan", icon: HandGrabbing },
   { id: "connect", label: "Connect", icon: LinkSimple },
   { id: "comment", label: "Comment", icon: ChatCircleText },
   { id: "note", label: "Note", icon: NoteBlank },
+  { id: "instruction", label: "Instruction", icon: Path },
+  { id: "work", label: "Work", icon: ListChecks },
   { id: "blocker", label: "Blocker", icon: WarningCircle },
-  { id: "agent", label: "Agent pin", icon: Robot },
-  { id: "asset", label: "Asset", icon: Cube },
 ];
 
-export function CanvasToolbar({ tool, onTool }: Props) {
+const overviewTools = branchTools.filter((t) => ["select", "hand"].includes(t.id));
+
+export function CanvasToolbar({ tool, onTool, mode }: Props) {
+  const tools = mode === "overview" ? overviewTools : branchTools;
+
   return (
     <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2">
       <div className="pointer-events-auto flex items-center gap-0.5 rounded-[10px] border border-border bg-surface/95 p-1 shadow-[0_2px_8px_rgba(0,0,0,0.04)] backdrop-blur-md">
-        {tools.map((item, index) => {
+        {tools.map((item) => {
           const Icon = item.icon;
           const active = tool === item.id;
-          const dividerBefore = item.id === "comment" || item.id === "agent";
+          const dividerBefore = item.id === "comment";
           return (
             <div key={item.id} className="flex items-center">
               {dividerBefore ? <div className="mx-1 h-5 w-px bg-border" /> : null}
@@ -59,7 +65,6 @@ export function CanvasToolbar({ tool, onTool }: Props) {
                     ? "bg-ink text-white"
                     : "text-ink-secondary hover:bg-surface-soft hover:text-ink",
                 )}
-                style={{ ["--index" as string]: index }}
               >
                 <Icon size={14} weight="bold" />
                 <span className="hidden lg:inline">{item.label}</span>

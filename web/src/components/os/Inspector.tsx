@@ -1,20 +1,31 @@
 "use client";
 
-import { X, Check, ArrowRight, ClockCounterClockwise } from "@phosphor-icons/react";
+import { X, Check, ArrowRight, Users } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { activityFeed, agents, issueDetail, stageChecklist } from "@/lib/data";
-import type { InspectorSelection } from "@/lib/types";
+import { departments, getDepartment, issueDetail, membersForDepartment } from "@/lib/data";
+import type { DepartmentId, InspectorSelection, Member } from "@/lib/types";
 import clsx from "clsx";
 
 type Props = {
   selection: InspectorSelection;
   open: boolean;
   onClose: () => void;
+  onOpenDepartment?: (id: DepartmentId) => void;
   onApplyFix?: () => void;
+  mode: "overview" | "branch";
+  departmentId?: DepartmentId;
 };
 
-export function Inspector({ selection, open, onClose, onApplyFix }: Props) {
+export function Inspector({
+  selection,
+  open,
+  onClose,
+  onOpenDepartment,
+  onApplyFix,
+  mode,
+  departmentId,
+}: Props) {
   if (!open) return null;
 
   return (
@@ -33,112 +44,173 @@ export function Inspector({ selection, open, onClose, onApplyFix }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
-        {selection.type === "none" ? <IdleState /> : null}
-        {selection.type === "node" ? (
-          <NodeDetail selection={selection} onApplyFix={onApplyFix} />
+        {selection.type === "none" && mode === "overview" ? <CampaignPulse /> : null}
+        {selection.type === "none" && mode === "branch" && departmentId ? (
+          <DepartmentPulse id={departmentId} />
         ) : null}
+        {selection.type === "department" ? (
+          <DepartmentDetail id={selection.id} onOpen={() => onOpenDepartment?.(selection.id)} />
+        ) : null}
+        {selection.type === "item" ? (
+          <ItemDetail selection={selection} onApplyFix={onApplyFix} />
+        ) : null}
+        {selection.type === "member" ? <MemberDetail member={selection.member} /> : null}
         {selection.type === "attention" ? (
-          <AttentionDetail item={selection.item} onApplyFix={onApplyFix} />
+          <AttentionDetail
+            item={selection.item}
+            onOpen={() => onOpenDepartment?.(selection.item.departmentId)}
+          />
         ) : null}
       </div>
     </aside>
   );
 }
 
-function IdleState() {
+function CampaignPulse() {
   return (
     <div className="fade-up space-y-5">
       <div>
         <h2 className="font-serif text-[22px] leading-tight tracking-[-0.03em] text-ink">
           SecureEdge
         </h2>
-        <p className="mt-1 text-[13px] text-ink-secondary">Northwind Security · Launch Nov 10</p>
+        <p className="mt-1 text-[13px] text-ink-secondary">
+          Full campaign graph · departments as rooms
+        </p>
       </div>
 
-      <div className="space-y-2">
-        {stageChecklist.map((item) => (
-          <div
-            key={item.label}
+      <p className="text-[13px] leading-relaxed text-ink-secondary">
+        Double-click a department to enter its workspace. People and agents work inside those rooms
+        — they are not separate steps on the graph.
+      </p>
+
+      <ul className="space-y-2">
+        {departments.map((d) => (
+          <li
+            key={d.id}
             className="flex items-center justify-between rounded-[8px] border border-border px-3 py-2"
           >
-            <span className="text-[13px] text-ink">{item.label}</span>
-            <StatusBadge
-              tone={item.state === "complete" ? "ok" : item.state === "warn" ? "warn" : "neutral"}
-            >
-              {item.state === "complete" ? "Done" : item.state === "warn" ? "Attention" : "Queued"}
+            <span className="text-[13px] text-ink">{d.name}</span>
+            <StatusBadge tone={d.tone}>
+              {d.status === "complete"
+                ? "Done"
+                : d.status === "blocked"
+                  ? "Blocked"
+                  : d.status === "in_review"
+                    ? "Review"
+                    : "Active"}
             </StatusBadge>
-          </div>
+          </li>
         ))}
-      </div>
-
-      <section>
-        <div className="mb-2 flex items-center gap-1.5 text-ink-tertiary">
-          <ClockCounterClockwise size={13} weight="bold" />
-          <span className="text-[11px] font-medium uppercase tracking-[0.05em]">
-            Agent activity
-          </span>
-        </div>
-        <ul className="space-y-0">
-          {activityFeed.slice(0, 5).map((row) => (
-            <li
-              key={`${row.time}-${row.text}`}
-              className="border-b border-border py-2.5 last:border-0"
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-mono text-[11px] text-ink-tertiary">{row.time}</span>
-                <StatusBadge tone={row.tone === "ok" ? "ok" : "warn"}>
-                  {row.tone === "ok" ? "Done" : "Flag"}
-                </StatusBadge>
-              </div>
-              <p className="mt-1 text-[12px] font-medium text-ink">{row.agent}</p>
-              <p className="text-[12px] text-ink-secondary">{row.text}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section>
-        <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-          Agents in space
-        </p>
-        <ul className="space-y-2">
-          {agents.slice(0, 3).map((agent) => (
-            <li key={agent.id} className="rounded-[8px] border border-border px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[13px] font-medium text-ink">{agent.name}</span>
-                <span
-                  className={clsx(
-                    "h-1.5 w-1.5 rounded-full",
-                    agent.status === "working"
-                      ? "bg-pale-green-ink"
-                      : agent.status === "waiting"
-                        ? "bg-pale-yellow-ink"
-                        : "bg-ink-tertiary",
-                  )}
-                />
-              </div>
-              <p className="mt-0.5 text-[12px] text-ink-secondary">{agent.lastAction}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
+      </ul>
     </div>
   );
 }
 
-function NodeDetail({
+function DepartmentPulse({ id }: { id: DepartmentId }) {
+  const dept = getDepartment(id);
+  const team = membersForDepartment(id);
+
+  return (
+    <div className="fade-up space-y-4">
+      <div>
+        <StatusBadge tone={dept.tone}>{dept.name}</StatusBadge>
+        <h2 className="mt-2 text-[16px] font-medium tracking-[-0.02em] text-ink">
+          Department workspace
+        </h2>
+        <p className="mt-1 text-[13px] text-ink-secondary">{dept.summary}</p>
+      </div>
+
+      {dept.attention ? (
+        <div className="rounded-[8px] border border-pale-yellow-ink/20 bg-pale-yellow px-3 py-2.5 text-[13px] text-pale-yellow-ink">
+          {dept.attention}
+        </div>
+      ) : null}
+
+      <section>
+        <div className="mb-2 flex items-center gap-1.5 text-ink-tertiary">
+          <Users size={13} weight="bold" />
+          <span className="text-[11px] font-medium uppercase tracking-[0.05em]">Working here</span>
+        </div>
+        <ul className="space-y-2">
+          {team.map((m) => (
+            <MemberRow key={m.id} member={m} />
+          ))}
+        </ul>
+      </section>
+
+      {dept.branches?.length ? (
+        <section>
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
+            Lanes
+          </p>
+          <ul className="space-y-2">
+            {dept.branches.map((b) => (
+              <li
+                key={b.id}
+                className="flex items-center justify-between border-b border-border py-2"
+              >
+                <span className="text-[13px] text-ink">{b.name}</span>
+                <StatusBadge tone={b.tone}>{b.status.replace("_", " ")}</StatusBadge>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function DepartmentDetail({ id, onOpen }: { id: DepartmentId; onOpen: () => void }) {
+  const dept = getDepartment(id);
+  const team = membersForDepartment(id);
+
+  return (
+    <div className="fade-up space-y-4">
+      <div>
+        <StatusBadge tone={dept.tone}>Department</StatusBadge>
+        <h2 className="mt-2 text-[18px] font-medium tracking-[-0.02em] text-ink">{dept.name}</h2>
+        <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{dept.summary}</p>
+      </div>
+
+      {dept.attention ? (
+        <div className="rounded-[8px] bg-pale-yellow px-3 py-2.5 text-[13px] text-pale-yellow-ink">
+          {dept.attention}
+        </div>
+      ) : null}
+
+      <section>
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
+          Team in this room
+        </p>
+        <ul className="space-y-2">
+          {team.map((m) => (
+            <MemberRow key={m.id} member={m} />
+          ))}
+        </ul>
+      </section>
+
+      <Button onClick={onOpen}>
+        Enter workspace
+        <ArrowRight size={14} weight="bold" />
+      </Button>
+    </div>
+  );
+}
+
+function ItemDetail({
   selection,
   onApplyFix,
 }: {
-  selection: Extract<InspectorSelection, { type: "node" }>;
+  selection: Extract<InspectorSelection, { type: "item" }>;
   onApplyFix?: () => void;
 }) {
-  const isBlockerOrClaim =
-    selection.kind === "blocker" ||
-    selection.id === "asset-li3" ||
-    selection.id === "blocker-claim";
+  const isClaimIssue =
+    selection.id === "co-claim" ||
+    selection.id === "cr-blocker" ||
+    selection.id === "cr-li3" ||
+    selection.kind === "blocker";
 
-  if (isBlockerOrClaim) {
+  if (isClaimIssue && selection.departmentId === "compliance") {
     return (
       <div className="fade-up space-y-4">
         <div>
@@ -146,7 +218,6 @@ function NodeDetail({
           <h2 className="mt-2 text-[16px] font-medium tracking-[-0.02em] text-ink">
             {issueDetail.title}
           </h2>
-          <p className="mt-1 text-[12px] text-ink-secondary">{selection.title}</p>
         </div>
 
         <blockquote className="rounded-[8px] border border-border bg-canvas px-3 py-2.5 text-[13px] italic leading-relaxed text-ink">
@@ -176,104 +247,78 @@ function NodeDetail({
             Apply suggestion
           </Button>
           <Button variant="secondary">Edit manually</Button>
-          <Button variant="ghost">Request human review</Button>
+          <Button variant="ghost">Ask Sarah to review</Button>
         </div>
-      </div>
-    );
-  }
-
-  if (selection.kind === "agent") {
-    return (
-      <div className="fade-up space-y-4">
-        <div>
-          <StatusBadge tone="info">Agent</StatusBadge>
-          <h2 className="mt-2 text-[16px] font-medium text-ink">{selection.title}</h2>
-          <p className="mt-1 text-[13px] text-ink-secondary">{selection.subtitle}</p>
-        </div>
-        <div className="space-y-2 border-t border-border pt-3">
-          <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-            Can
-          </p>
-          {["Create drafts", "Run QA checks", "Request approval", "Generate variations"].map(
-            (item) => (
-              <p key={item} className="flex items-center gap-2 text-[13px] text-ink">
-                <Check size={13} className="text-pale-green-ink" weight="bold" />
-                {item}
-              </p>
-            ),
-          )}
-          <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-            Cannot
-          </p>
-          {["Approve legal content", "Publish campaigns"].map((item) => (
-            <p key={item} className="flex items-center gap-2 text-[13px] text-ink-secondary">
-              <X size={13} className="text-pale-red-ink" weight="bold" />
-              {item}
-            </p>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (selection.kind === "launch") {
-    return (
-      <div className="fade-up space-y-4">
-        <div>
-          <StatusBadge tone="warn">Not ready</StatusBadge>
-          <h2 className="mt-2 font-serif text-[28px] leading-none tracking-[-0.04em] text-ink">
-            87
-            <span className="text-[16px] text-ink-tertiary"> / 100</span>
-          </h2>
-          <p className="mt-2 text-[13px] text-ink-secondary">Two blockers remain before launch.</p>
-        </div>
-        <ul className="space-y-2">
-          {[
-            ["Creative", "ok"],
-            ["Brand", "ok"],
-            ["Compliance", "warn"],
-            ["Germany", "danger"],
-            ["Tracking", "ok"],
-          ].map(([label, tone]) => (
-            <li
-              key={label}
-              className="flex items-center justify-between border-b border-border py-2"
-            >
-              <span className="text-[13px] text-ink">{label}</span>
-              <StatusBadge tone={tone === "ok" ? "ok" : tone === "danger" ? "danger" : "warn"}>
-                {tone === "ok" ? "Ready" : tone === "danger" ? "Blocked" : "Review"}
-              </StatusBadge>
-            </li>
-          ))}
-        </ul>
-        <Button variant="secondary">
-          View blockers
-          <ArrowRight size={14} weight="bold" />
-        </Button>
       </div>
     );
   }
 
   return (
     <div className="fade-up space-y-3">
-      <StatusBadge tone="neutral">{selection.kind}</StatusBadge>
+      <StatusBadge tone={selection.kind === "blocker" ? "danger" : "neutral"}>
+        {selection.kind}
+      </StatusBadge>
       <h2 className="text-[16px] font-medium text-ink">{selection.title}</h2>
       {selection.subtitle ? (
         <p className="text-[13px] leading-relaxed text-ink-secondary">{selection.subtitle}</p>
       ) : null}
       <p className="text-[12px] text-ink-tertiary">
-        Drag freely on the board. Agents can attach comments, blockers, and updates to this object.
+        Part of this department’s board. Anyone on the team — human or agent — can leave comments,
+        notes, and instructions here.
       </p>
+    </div>
+  );
+}
+
+function MemberDetail({ member }: { member: Member }) {
+  return (
+    <div className="fade-up space-y-4">
+      <div className="flex items-center gap-3">
+        <span
+          className={clsx(
+            "flex h-10 w-10 items-center justify-center rounded-full text-[12px] font-medium",
+            member.kind === "agent" ? "bg-pale-blue text-pale-blue-ink" : "bg-canvas text-ink",
+          )}
+        >
+          {member.initials}
+        </span>
+        <div>
+          <h2 className="text-[16px] font-medium text-ink">{member.name}</h2>
+          <p className="text-[12px] text-ink-secondary">
+            {member.role}
+            {member.kind === "agent" ? " · Agent teammate" : " · Human"}
+          </p>
+        </div>
+      </div>
+
+      <p className="text-[13px] leading-relaxed text-ink-secondary">
+        {member.kind === "agent"
+          ? "Works the same rooms as everyone else — drafts, checks, comments, and handoffs. Cannot publish or give final legal approval."
+          : "Makes decisions that move the campaign forward: approvals, direction, and exceptions."}
+      </p>
+
+      <div>
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
+          Active in
+        </p>
+        <ul className="space-y-1">
+          {member.departmentIds.map((id) => (
+            <li key={id} className="text-[13px] text-ink">
+              {getDepartment(id).name}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
 
 function AttentionDetail({
   item,
-  onApplyFix,
+  onOpen,
 }: {
   item: Extract<InspectorSelection, { type: "attention" }>["item"];
-  onApplyFix?: () => void;
+  onOpen: () => void;
 }) {
   return (
     <div className="fade-up space-y-4">
@@ -285,9 +330,45 @@ function AttentionDetail({
         </StatusBadge>
         <h2 className="mt-2 text-[16px] font-medium text-ink">{item.title}</h2>
         <p className="mt-1 text-[13px] text-ink-secondary">{item.reason}</p>
+        <p className="mt-2 text-[12px] text-ink-tertiary">
+          Department · {getDepartment(item.departmentId).name}
+        </p>
       </div>
-      <Button onClick={onApplyFix}>Open on board</Button>
-      <Button variant="secondary">Snooze</Button>
+      <Button onClick={onOpen}>
+        Open department
+        <ArrowRight size={14} weight="bold" />
+      </Button>
     </div>
+  );
+}
+
+function MemberRow({ member }: { member: Member }) {
+  return (
+    <li className="flex items-center justify-between gap-2 rounded-[8px] border border-border px-3 py-2">
+      <div className="flex items-center gap-2 min-w-0">
+        <span
+          className={clsx(
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-medium",
+            member.kind === "agent" ? "bg-pale-blue text-pale-blue-ink" : "bg-canvas text-ink",
+          )}
+        >
+          {member.initials}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-medium text-ink">{member.name}</p>
+          <p className="truncate text-[11px] text-ink-tertiary">{member.role}</p>
+        </div>
+      </div>
+      <span
+        className={clsx(
+          "h-1.5 w-1.5 shrink-0 rounded-full",
+          member.status === "working"
+            ? "bg-pale-green-ink"
+            : member.status === "online"
+              ? "bg-ink-tertiary"
+              : "bg-border-strong",
+        )}
+      />
+    </li>
   );
 }
