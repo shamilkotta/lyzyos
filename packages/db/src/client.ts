@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/d1";
-import * as authSchema from "./auth-schema";
-import { schema as appSchema } from "./schema";
+import * as authSchema from "./auth.schema";
+import { schema as appSchema } from "./project.schema";
 
 export const schema = {
   ...appSchema,

@@ -42,7 +42,6 @@ export const spaces: CampaignSpace[] = [
   },
 ];
 
-/** Team roster — agents and humans are the same kind of member. */
 export const members: Member[] = [
   {
     id: "m-maya",
@@ -285,7 +284,6 @@ export const issueDetail = {
   source: "Approved Claims v2.1",
 };
 
-/** Overview graph layout positions */
 export const departmentLayout: Record<DepartmentId, { x: number; y: number }> = {
   intake: { x: 80, y: 280 },
   planning: { x: 340, y: 280 },
@@ -313,7 +311,6 @@ export const departmentEdges: [DepartmentId, DepartmentId][] = [
   ["approvals", "launch"],
 ];
 
-/** Per-department branch canvases — work lives here, not “AI tasks”. */
 export const branchBoards: Record<DepartmentId, BranchItem[]> = {
   intake: [
     {

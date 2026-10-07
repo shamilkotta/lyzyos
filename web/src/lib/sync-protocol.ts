@@ -1,62 +1,22 @@
-import type { BoardState, PlanningNode, Project } from "./project-types";
+import {
+  parseServerMessage,
+  type BoardSnapshot,
+  type ClientToServerMessage,
+  type ServerToClientMessage,
+  type SyncEvent,
+  type SyncPeer,
+} from "@lyzyos/db";
+import type { BoardState } from "./project-types";
+import { toBoardState } from "./project-types";
 
-export type BoardSnapshot = {
-  project: Project;
-  nodes: PlanningNode[];
-  edges: { id: string; sourceId: string; targetId: string }[];
-};
-
-export type SyncPeer = {
-  clientId: string;
-  name: string;
-  color: string;
-  selectedId?: string;
-  cursor?: { x: number; y: number };
-  joinedAt: number;
-};
-
-export type SyncEvent =
-  | { type: "board.replace"; board: BoardSnapshot }
-  | { type: "project.updated"; project: Project }
-  | { type: "node.upserted"; node: PlanningNode }
-  | { type: "node.removed"; nodeId: string }
-  | { type: "edge.upserted"; edge: { id: string; sourceId: string; targetId: string } }
-  | { type: "edge.removed"; edgeId: string };
-
-export type ServerToClientMessage =
-  | {
-      type: "ready";
-      projectId: string;
-      seq: number;
-      snapshot: BoardSnapshot;
-      peers: SyncPeer[];
-      you: SyncPeer;
-    }
-  | {
-      type: "event";
-      projectId: string;
-      seq: number;
-      originClientId: string | null;
-      event: SyncEvent;
-    }
-  | { type: "presence"; projectId: string; peers: SyncPeer[] }
-  | { type: "pong" }
-  | { type: "error"; message: string };
-
-export type ClientToServerMessage =
-  | { type: "hello"; clientId: string; name: string; color?: string }
-  | {
-      type: "presence";
-      selectedId?: string | null;
-      cursor?: { x: number; y: number } | null;
-    }
-  | { type: "ping" };
+export type { BoardSnapshot, ClientToServerMessage, ServerToClientMessage, SyncEvent, SyncPeer };
+export { parseServerMessage };
 
 export const CLIENT_ID_HEADER = "X-Client-Id";
 const CLIENT_ID_KEY = "lyzy.clientId";
 const CLIENT_NAME_KEY = "lyzy.clientName";
 
-export function getOrCreateClientId(): string {
+export function getOrCreateClientId() {
   if (typeof window === "undefined") return crypto.randomUUID();
   const existing = window.localStorage.getItem(CLIENT_ID_KEY);
   if (existing) return existing;
@@ -65,30 +25,21 @@ export function getOrCreateClientId(): string {
   return id;
 }
 
-export function getClientName(): string {
+export function getClientName() {
   if (typeof window === "undefined") return "You";
   return window.localStorage.getItem(CLIENT_NAME_KEY) || "You";
 }
 
-export function applySyncEvent(board: BoardState, event: SyncEvent): BoardState {
+export function applySyncEvent(board: BoardState, event: SyncEvent) {
   switch (event.type) {
     case "board.replace":
-      return {
-        ...board,
-        projectId: event.board.project.id,
-        projectName: event.board.project.name,
-        planningStatus: event.board.project.planningStatus,
-        threadId: event.board.project.threadId,
-        nodes: event.board.nodes,
-        edges: event.board.edges,
-      };
+      return toBoardState(event.board, board);
     case "project.updated":
       return {
         ...board,
         projectId: event.project.id,
         projectName: event.project.name,
-        planningStatus: event.project.planningStatus,
-        threadId: event.project.threadId,
+        status: event.project.status,
       };
     case "node.upserted": {
       const idx = board.nodes.findIndex((n) => n.id === event.node.id);
@@ -120,37 +71,26 @@ export function applySyncEvent(board: BoardState, event: SyncEvent): BoardState 
     }
     case "edge.removed":
       return { ...board, edges: board.edges.filter((e) => e.id !== event.edgeId) };
-    default:
-      return board;
+    default: {
+      const _exhaustive: never = event;
+      return _exhaustive;
+    }
   }
 }
 
-export function snapshotToBoardState(
-  snapshot: BoardSnapshot,
-  prev?: BoardState | null,
-): BoardState {
-  return {
-    projectId: snapshot.project.id,
-    projectName: snapshot.project.name,
-    planningStatus: snapshot.project.planningStatus,
-    threadId: snapshot.project.threadId,
-    nodes: snapshot.nodes,
-    edges: snapshot.edges,
-    agentStatus: prev?.agentStatus ?? "idle",
-    agentMessage: prev?.agentMessage,
-  };
+export function snapshotToBoardState(snapshot: BoardSnapshot, prev?: BoardState | null) {
+  return toBoardState(snapshot, prev);
 }
 
-/** Direct to API worker — Next rewrites do not proxy WebSocket upgrades. */
-export function projectSyncWsUrl(
-  projectId: string,
+export function workspaceSyncWsUrl(
+  workspaceId: string,
   params: { clientId: string; name: string },
-): string {
+) {
   const httpBase =
     process.env.NEXT_PUBLIC_API_BASE ||
     process.env.NEXT_PUBLIC_API_WS_BASE ||
-    "http://127.0.0.1:8788";
-  const url = new URL(`/api/projects/${projectId}/sync`, httpBase);
+    "http://localhost:8788";
+  const url = new URL(`/api/workspaces/${workspaceId}/sync`, httpBase);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.searchParams.set("clientId", params.clientId);
   url.searchParams.set("name", params.name);

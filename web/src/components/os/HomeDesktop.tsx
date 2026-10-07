@@ -1,32 +1,40 @@
 "use client";
 
-import { CirclesFour, DotOutline } from "@phosphor-icons/react";
-import { PRODUCT_NAME, spaces, attentionQueue, members, getDepartment } from "@/lib/data";
-import type { Project } from "@/lib/project-types";
+import { CirclesFour, DotOutline, SpinnerGap } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { PRODUCT_NAME, attentionQueue, members, getDepartment } from "@/lib/data";
+import { useProjects } from "@/lib/queries/projects";
+import { routes } from "@/lib/routes";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { KickoffComposer } from "./KickoffComposer";
 import clsx from "clsx";
 
+const RECENT_PROJECT_COUNT = 3;
+
+const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
+const relativeFormat = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+function formatDate(timestamp: number) {
+  return dateFormat.format(timestamp);
+}
+
+function formatRelative(timestamp: number) {
+  const minutes = Math.round((timestamp - Date.now()) / 60_000);
+  if (Math.abs(minutes) < 60) return relativeFormat.format(minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (Math.abs(hours) < 24) return relativeFormat.format(hours, "hour");
+  return relativeFormat.format(Math.round(hours / 24), "day");
+}
+
 type Props = {
-  onOpenSpace: (id: string) => void;
-  onOpenLiveProject: (id: string, name: string) => void;
-  onCreated: (projectId: string, projectName: string) => void;
   kickoffFocusToken?: number;
-  liveProjects: Project[];
-  rail: "home" | "spaces" | "knowledge" | "agents" | "settings";
 };
 
-export function HomeDesktop({
-  onOpenSpace,
-  onOpenLiveProject,
-  onCreated,
-  kickoffFocusToken,
-  liveProjects,
-  rail,
-}: Props) {
-  if (rail === "knowledge") return <KnowledgeSurface />;
-  if (rail === "agents") return <AgentsSurface />;
-  if (rail === "settings") return <SettingsSurface />;
+export function HomeDesktop({ kickoffFocusToken }: Props) {
+  const router = useRouter();
+  const { data: liveProjects = [], isLoading, isFetching, refetch } = useProjects();
+  // The API returns projects most recently updated first.
+  const recentProjects = liveProjects.slice(0, RECENT_PROJECT_COUNT);
 
   return (
     <div className="relative h-full overflow-auto">
@@ -44,127 +52,91 @@ export function HomeDesktop({
           <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-tertiary">
             Marketing operations desk
           </p>
-          <h1 className="mt-2 font-serif text-[40px] leading-[1.05] tracking-[-0.035em] text-ink">
+          <h1 className="mt-2 font-brand text-[40px] font-semibold leading-[1.05] tracking-[-0.045em] text-ink">
             {PRODUCT_NAME}
           </h1>
           <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-secondary">
-            Open a campaign graph. Departments are rooms. People and agents work inside those rooms
-            together — comments, notes, assets, decisions.
+            Open a campaign graph. Departments are rooms. Teammates work inside those rooms together
+            — comments, notes, assets, decisions.
           </p>
         </header>
 
         <div className="mb-10">
-          <KickoffComposer onCreated={onCreated} focusToken={kickoffFocusToken} />
+          <KickoffComposer
+            focusToken={kickoffFocusToken}
+            onCreated={(projectId, _name, workspaceId) => {
+              void refetch();
+              if (workspaceId) {
+                router.push(routes.projectWorkspace(projectId, workspaceId));
+                return;
+              }
+              router.push(routes.project(projectId));
+            }}
+          />
         </div>
 
-        {liveProjects.length > 0 ? (
+        {isLoading ? (
+          <div className="mb-10 flex items-center gap-2 text-[13px] text-ink-tertiary">
+            <SpinnerGap size={14} className="animate-spin" />
+            Loading projects…
+          </div>
+        ) : null}
+
+        {!isLoading ? (
           <section className="mb-10">
             <div className="mb-3 flex items-baseline justify-between">
               <h2 className="text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-                Recents
+                Recent
               </h2>
               <span className="font-mono text-[11px] text-ink-tertiary">
-                {liveProjects.length} live
+                {liveProjects.length} {liveProjects.length === 1 ? "project" : "projects"}
+                {isFetching ? " · refreshing" : ""}
               </span>
             </div>
-            <div className="stagger grid gap-3 md:grid-cols-3">
-              {liveProjects.map((project, index) => (
-                <button
-                  key={project.id}
-                  type="button"
-                  onClick={() => onOpenLiveProject(project.id, project.name)}
-                  className={clsx(
-                    "group rounded-[12px] border border-border bg-surface p-4 text-left transition-[box-shadow,border-color,transform] duration-200",
-                    "hover:border-border-strong hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-[0.99]",
-                  )}
-                  style={{ ["--index" as string]: index }}
-                >
-                  <div className="mb-4 flex items-center justify-between">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-canvas text-ink">
-                      <CirclesFour size={15} weight="bold" />
-                    </span>
-                    <StatusBadge tone={project.planningStatus === "in_progress" ? "info" : "ok"}>
-                      {project.planningStatus === "in_progress" ? "Planning" : "Ready"}
-                    </StatusBadge>
-                  </div>
+            {recentProjects.length === 0 ? (
+              <p className="rounded-[12px] border border-dashed border-border px-4 py-6 text-center text-[13px] text-ink-tertiary">
+                No projects yet. Start one with a brief above.
+              </p>
+            ) : (
+              <div className="stagger grid gap-3 md:grid-cols-3">
+                {recentProjects.map((project, index) => (
+                  <button
+                    key={project.id}
+                    type="button"
+                    onClick={() => router.push(routes.project(project.id))}
+                    className={clsx(
+                      "group rounded-[12px] border border-border bg-surface p-4 text-left transition-[box-shadow,border-color,transform] duration-200",
+                      "hover:border-border-strong hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-[0.99]",
+                    )}
+                    style={{ ["--index" as string]: index }}
+                  >
+                    <div className="mb-4 flex items-center justify-between">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-canvas text-ink">
+                        <CirclesFour size={15} weight="bold" />
+                      </span>
+                      <StatusBadge tone={project.status === "in_progress" ? "info" : "ok"}>
+                        {project.status === "in_progress" ? "In progress" : "Complete"}
+                      </StatusBadge>
+                    </div>
 
-                  <SpacePreview panes={["bg-surface", "bg-pale-blue/70", "bg-pale-yellow/80"]} />
+                    <SpacePreview panes={["bg-surface", "bg-pale-yellow/80", "bg-pale-blue/70"]} />
 
-                  <h3 className="text-[14px] font-medium tracking-[-0.01em] text-ink">
-                    {project.name}
-                  </h3>
-                  <p className="mt-1 text-[12px] text-ink-secondary">
-                    Live project · Planning desk
-                  </p>
-                  <div className="mt-3 flex items-center justify-between text-[12px] text-ink-tertiary">
-                    <span>Planning</span>
-                    <span className="font-mono">Live</span>
-                  </div>
-                </button>
-              ))}
-            </div>
+                    <h3 className="truncate text-[14px] font-medium tracking-[-0.01em] text-ink">
+                      {project.name}
+                    </h3>
+                    <p className="mt-1 text-[12px] text-ink-secondary">
+                      Updated {formatRelative(project.updatedAt)}
+                    </p>
+                    <div className="mt-3 flex items-center justify-between text-[12px] text-ink-tertiary">
+                      <span>Created</span>
+                      <span className="font-mono">{formatDate(project.createdAt)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
         ) : null}
-
-        <section className="mb-10">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-              Demo spaces
-            </h2>
-            <span className="font-mono text-[11px] text-ink-tertiary">{spaces.length} running</span>
-          </div>
-
-          <div className="stagger grid gap-3 md:grid-cols-3">
-            {spaces.map((space, index) => (
-              <button
-                key={space.id}
-                type="button"
-                onClick={() => onOpenSpace(space.id)}
-                className={clsx(
-                  "group rounded-[12px] border border-border bg-surface p-4 text-left transition-[box-shadow,border-color,transform] duration-200",
-                  "hover:border-border-strong hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-[0.99]",
-                )}
-                style={{ ["--index" as string]: index }}
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-canvas text-ink">
-                    <CirclesFour size={15} weight="bold" />
-                  </span>
-                  <StatusBadge
-                    tone={
-                      space.status === "blocked"
-                        ? "danger"
-                        : space.status === "ready"
-                          ? "ok"
-                          : "info"
-                    }
-                  >
-                    {space.status === "blocked"
-                      ? "Blocked"
-                      : space.status === "ready"
-                        ? "Ready"
-                        : "In progress"}
-                  </StatusBadge>
-                </div>
-
-                <SpacePreview panes={["bg-surface", "bg-pale-yellow/80", "bg-pale-red/80"]} />
-
-                <h3 className="text-[14px] font-medium tracking-[-0.01em] text-ink">
-                  {space.name}
-                </h3>
-                <p className="mt-1 text-[12px] text-ink-secondary">
-                  {space.client} · Launch {space.launchDate}
-                </p>
-                <div className="mt-3 flex items-center justify-between text-[12px] text-ink-tertiary">
-                  <span>{space.stage}</span>
-                  <span className="font-mono">
-                    {space.attention > 0 ? `${space.attention} need you` : "Clear"}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
 
         <section className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
           <div>
@@ -185,7 +157,7 @@ export function HomeDesktop({
                   </div>
                   <button
                     type="button"
-                    onClick={() => onOpenSpace(item.campaignId)}
+                    onClick={() => router.push(routes.space(item.campaignId))}
                     className="shrink-0 text-[12px] font-medium text-ink underline-offset-2 hover:underline"
                   >
                     Open
@@ -209,14 +181,7 @@ export function HomeDesktop({
                     className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 last:border-0"
                   >
                     <div className="flex min-w-0 items-center gap-2">
-                      <span
-                        className={clsx(
-                          "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-medium",
-                          member.kind === "agent"
-                            ? "bg-pale-blue text-pale-blue-ink"
-                            : "bg-canvas text-ink",
-                        )}
-                      >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-canvas text-[9px] font-medium text-ink">
                         {member.initials}
                       </span>
                       <div className="min-w-0">
@@ -257,7 +222,7 @@ function SpacePreview({ panes }: { panes: [string, string, string] }) {
   );
 }
 
-function KnowledgeSurface() {
+export function KnowledgeSurface() {
   const groups = [
     {
       title: "Brand",
@@ -306,12 +271,12 @@ function KnowledgeSurface() {
   );
 }
 
-function AgentsSurface() {
+export function AgentsSurface() {
   return (
     <div className="mx-auto max-w-3xl px-8 py-12 fade-up">
       <h1 className="font-serif text-[32px] tracking-[-0.03em] text-ink">Team</h1>
       <p className="mt-2 text-[14px] text-ink-secondary">
-        Humans and agents are teammates. Same rooms, same board objects — different permissions.
+        Teammates share the same rooms and board objects.
       </p>
       <ul className="mt-8 rounded-[12px] border border-border bg-surface">
         {members.map((member) => (
@@ -320,22 +285,12 @@ function AgentsSurface() {
             className="flex items-start justify-between gap-4 border-b border-border px-4 py-4 last:border-0"
           >
             <div className="flex min-w-0 items-start gap-3">
-              <span
-                className={clsx(
-                  "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-medium",
-                  member.kind === "agent"
-                    ? "bg-pale-blue text-pale-blue-ink"
-                    : "bg-canvas text-ink",
-                )}
-              >
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-canvas text-[11px] font-medium text-ink">
                 {member.initials}
               </span>
               <div>
                 <p className="text-[14px] font-medium text-ink">{member.name}</p>
-                <p className="mt-0.5 text-[12px] text-ink-secondary">
-                  {member.role}
-                  {member.kind === "agent" ? " · Agent" : " · Human"}
-                </p>
+                <p className="mt-0.5 text-[12px] text-ink-secondary">{member.role}</p>
                 <p className="mt-2 text-[12px] text-ink-tertiary">
                   {member.departmentIds.map((id) => getDepartment(id).name).join(" · ")}
                 </p>
@@ -351,7 +306,7 @@ function AgentsSurface() {
   );
 }
 
-function SettingsSurface() {
+export function SettingsSurface() {
   return (
     <div className="mx-auto max-w-xl px-8 py-12 fade-up">
       <h1 className="font-serif text-[32px] tracking-[-0.03em] text-ink">Settings</h1>

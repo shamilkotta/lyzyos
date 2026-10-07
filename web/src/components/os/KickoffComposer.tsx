@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Paperclip, FileText, X, SpinnerGap } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { createProject } from "@/lib/api";
+import { useCreateProject } from "@/lib/queries/projects";
 import { PROJECT_DOC_ACCEPT, filterAllowedProjectDocs } from "@/lib/docs";
 import clsx from "clsx";
 
@@ -16,7 +16,7 @@ type Attachment = {
 };
 
 type Props = {
-  onCreated: (projectId: string, projectName: string) => void;
+  onCreated: (projectId: string, projectName: string, workspaceId: string) => void;
   focusToken?: number;
 };
 
@@ -27,12 +27,14 @@ function formatSize(bytes: number) {
 }
 
 export function KickoffComposer({ onCreated, focusToken }: Props) {
+  const createProject = useCreateProject();
   const [brief, setBrief] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [phase, setPhase] = useState<"compose" | "analyzing" | "ready">("compose");
   const [error, setError] = useState<string | null>(null);
   const [createdName, setCreatedName] = useState("");
   const [createdId, setCreatedId] = useState("");
+  const [createdWorkspaceId, setCreatedWorkspaceId] = useState("");
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -67,19 +69,20 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
     });
   };
 
-  const canSubmit = brief.trim().length > 0 || attachments.length > 0;
+  const canSubmit = brief.trim().length > 0;
 
   const submit = async () => {
-    if (!canSubmit || phase !== "compose") return;
+    if (!canSubmit || phase !== "compose" || createProject.isPending) return;
     setPhase("analyzing");
     setError(null);
     try {
-      const result = await createProject({
+      const result = await createProject.mutateAsync({
         brief: brief.trim(),
         files: attachments.map((a) => a.file),
       });
       setCreatedId(result.projectId);
-      setCreatedName(result.project?.name ?? "Untitled project");
+      setCreatedWorkspaceId(result.workspaceId);
+      setCreatedName("Untitled project");
       setPhase("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start project.");
@@ -93,6 +96,7 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
     setAttachments([]);
     setError(null);
     setCreatedId("");
+    setCreatedWorkspaceId("");
     setCreatedName("");
   };
 
@@ -123,8 +127,8 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
                 {createdName}
               </h2>
               <p className="mt-1 text-[12px] text-ink-secondary">
-                Lyzy is reading the brief in the background. Open the project graph, then enter
-                Planning.
+                Lyzy is reading the brief in the background. Open the workspace to watch the board
+                fill in.
               </p>
             </div>
             <button
@@ -140,7 +144,12 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
             <Button variant="secondary" onClick={reset}>
               Stay on home
             </Button>
-            <Button onClick={() => onCreated(createdId, createdName)}>Open project</Button>
+            <Button
+              onClick={() => onCreated(createdId, createdName, createdWorkspaceId)}
+              disabled={!createdWorkspaceId}
+            >
+              Open workspace
+            </Button>
           </div>
         </div>
       ) : null}

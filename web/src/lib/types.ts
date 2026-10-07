@@ -1,14 +1,30 @@
 export type StatusTone = "neutral" | "ok" | "warn" | "danger" | "info";
 
-export type WorkStatus =
-  | "not_started"
-  | "in_progress"
-  | "blocked"
-  | "in_review"
-  | "complete"
-  | "ready";
+export const workStatuses = [
+  "not_started",
+  "in_progress",
+  "blocked",
+  "in_review",
+  "complete",
+  "ready",
+] as const;
+export type WorkStatus = (typeof workStatuses)[number];
 
 export type MemberKind = "human" | "agent";
+
+export const departmentIds = [
+  "intake",
+  "planning",
+  "research",
+  "strategy",
+  "creative",
+  "brand",
+  "compliance",
+  "localization",
+  "approvals",
+  "launch",
+] as const;
+export type DepartmentId = (typeof departmentIds)[number];
 
 export type Member = {
   id: string;
@@ -18,19 +34,8 @@ export type Member = {
   initials: string;
   status: "online" | "working" | "away";
   departmentIds: DepartmentId[];
+  image?: string | null;
 };
-
-export type DepartmentId =
-  | "intake"
-  | "planning"
-  | "research"
-  | "strategy"
-  | "creative"
-  | "brand"
-  | "compliance"
-  | "localization"
-  | "approvals"
-  | "launch";
 
 export type Department = {
   id: DepartmentId;
@@ -39,14 +44,20 @@ export type Department = {
   status: WorkStatus;
   tone: StatusTone;
   memberIds: string[];
-  /** Parent departments this waits on */
   dependsOn: DepartmentId[];
-  /** Optional parallel lanes under this department */
   branches?: { id: string; name: string; status: WorkStatus; tone: StatusTone }[];
   attention?: string;
 };
 
-export type BranchItemKind = "work" | "asset" | "comment" | "note" | "blocker" | "instruction";
+export const branchItemKinds = [
+  "work",
+  "asset",
+  "comment",
+  "note",
+  "blocker",
+  "instruction",
+] as const;
+export type BranchItemKind = (typeof branchItemKinds)[number];
 
 export type BranchItem = {
   id: string;
@@ -100,3 +111,11 @@ export type InspectorSelection =
     }
   | { type: "member"; member: Member }
   | { type: "attention"; item: AttentionItem };
+
+export function isDepartmentId(value: string): value is DepartmentId {
+  return (departmentIds as readonly string[]).includes(value);
+}
+
+export function isBranchItemKind(value: string): value is BranchItemKind {
+  return (branchItemKinds as readonly string[]).includes(value);
+}

@@ -26,10 +26,17 @@ import {
   branchNodeTypes,
   overviewNodeTypes,
   type BoardNodeData,
-  type DepartmentNodeData,
   type ItemNodeData,
 } from "./nodes/CanvasNodes";
-import type { DepartmentId, InspectorSelection } from "@/lib/types";
+import { isDepartmentId, type DepartmentId, type InspectorSelection } from "@/lib/types";
+import { isRecord } from "@lyzyos/utils";
+
+const placeableTools = ["comment", "note", "blocker", "instruction", "work"] as const;
+type PlaceableTool = (typeof placeableTools)[number];
+
+function isPlaceableTool(value: string): value is PlaceableTool {
+  return (placeableTools as readonly string[]).includes(value);
+}
 
 type Props = {
   mode: "overview" | "branch";
@@ -38,7 +45,8 @@ type Props = {
   onSelect: (selection: InspectorSelection) => void;
   onOpenDepartment: (id: DepartmentId) => void;
   apiProjectName?: string;
-  onOpenPlanning?: () => void;
+  workspaceLabel?: string;
+  onOpenWorkspace?: () => void;
 };
 
 let placeCounter = 0;
@@ -50,7 +58,8 @@ export function CampaignCanvas({
   onSelect,
   onOpenDepartment,
   apiProjectName,
-  onOpenPlanning,
+  workspaceLabel,
+  onOpenWorkspace,
 }: Props) {
   const apiOverview = apiProjectName != null && apiProjectName.length > 0;
 
@@ -58,10 +67,10 @@ export function CampaignCanvas({
     () =>
       mode === "overview"
         ? apiOverview
-          ? buildApiProjectOverviewNodes(apiProjectName)
+          ? buildApiProjectOverviewNodes(apiProjectName, workspaceLabel)
           : buildOverviewNodes()
         : buildBranchNodes(departmentId ?? "creative"),
-    [mode, departmentId, apiOverview, apiProjectName],
+    [mode, departmentId, apiOverview, apiProjectName, workspaceLabel],
   );
   const initialEdges = useMemo(
     () =>
@@ -103,49 +112,49 @@ export function CampaignCanvas({
   const onNodeClick = useCallback(
     (event: React.MouseEvent, node: Node<BoardNodeData>) => {
       if (node.data.kind === "department") {
-        const data = node.data as DepartmentNodeData;
-        const openHit = (event.target as HTMLElement | null)?.closest?.("[data-open-workspace]");
+        const openHit = event.target instanceof Element ? event.target.closest("[data-open-workspace]") : null;
         if (openHit) {
-          if (apiOverview && node.id === "planning" && onOpenPlanning) {
-            onOpenPlanning();
+          if (apiOverview && node.id === "workspace" && onOpenWorkspace) {
+            onOpenWorkspace();
             return;
           }
-          onOpenDepartment(node.id as DepartmentId);
+          if (isDepartmentId(node.id)) onOpenDepartment(node.id);
           return;
         }
+        if (!isDepartmentId(node.id)) return;
         onSelect({
           type: "department",
-          id: node.id as DepartmentId,
-          title: data.title,
-          subtitle: data.summary,
+          id: node.id,
+          title: node.data.title,
+          subtitle: node.data.summary,
         });
         return;
       }
 
-      const data = node.data as ItemNodeData;
+      if (node.data.kind === "board") return;
       onSelect({
         type: "item",
         id: node.id,
-        kind: data.kind,
-        title: data.title,
-        subtitle: data.body,
+        kind: node.data.kind,
+        title: node.data.title,
+        subtitle: node.data.body,
         departmentId: departmentId ?? "creative",
       });
     },
-    [departmentId, onSelect, apiOverview, onOpenPlanning, onOpenDepartment],
+    [departmentId, onSelect, apiOverview, onOpenWorkspace, onOpenDepartment],
   );
 
   const onNodeDoubleClick = useCallback(
     (_: React.MouseEvent, node: Node<BoardNodeData>) => {
       if (mode === "overview" && node.data.kind === "department") {
-        if (apiOverview && node.id === "planning" && onOpenPlanning) {
-          onOpenPlanning();
+        if (apiOverview && node.id === "workspace" && onOpenWorkspace) {
+          onOpenWorkspace();
           return;
         }
-        onOpenDepartment(node.id as DepartmentId);
+        if (isDepartmentId(node.id)) onOpenDepartment(node.id);
       }
     },
-    [mode, onOpenDepartment, apiOverview, onOpenPlanning],
+    [mode, onOpenDepartment, apiOverview, onOpenWorkspace],
   );
 
   const onPaneClick = useCallback(
@@ -155,14 +164,13 @@ export function CampaignCanvas({
         return;
       }
 
-      const placeable = ["comment", "note", "blocker", "instruction", "work"];
-      if (!placeable.includes(tool)) {
+      if (!isPlaceableTool(tool)) {
         onSelect({ type: "none" });
         return;
       }
 
       placeCounter += 1;
-      const kind = tool as ItemNodeData["kind"];
+      const kind: ItemNodeData["kind"] = tool;
       const id = `${kind}-${placeCounter}`;
       const position = screenToFlowPosition({
         x: event.clientX,
@@ -231,7 +239,7 @@ export function CampaignCanvas({
         nodesDraggable={tool === "select"}
         nodesConnectable={tool === "connect" || tool === "select"}
         className={
-          mode === "branch" && ["comment", "note", "blocker", "instruction", "work"].includes(tool)
+          mode === "branch" && isPlaceableTool(tool)
             ? "cursor-crosshair"
             : undefined
         }
@@ -244,11 +252,10 @@ export function CampaignCanvas({
           zoomable
           nodeStrokeWidth={2}
           nodeColor={(n) => {
-            const kind = (n.data as BoardNodeData | undefined)?.kind;
+            const kind = isRecord(n.data) && typeof n.data.kind === "string" ? n.data.kind : null;
             if (kind === "blocker") return "#fdebec";
             if (kind === "comment") return "#fbf3db";
             if (kind === "instruction") return "#e1f3fe";
-            if (kind === "department") return "#ffffff";
             return "#ffffff";
           }}
           maskColor="rgba(247,246,243,0.75)"

@@ -1,3 +1,3 @@
 export { auth } from "./auth";
-export { createAuth, ensureAuth, type Auth } from "./server";
+export { createAuth, type Auth, type CreateAuthOptions } from "./server";
 export { authConfig, trustedOrigins, type AuthEnv } from "./config";

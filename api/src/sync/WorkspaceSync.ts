@@ -19,10 +19,19 @@ type Attachment = {
 
 const MAX_EVENT_LOG = 200;
 
-/**
- * One instance per projectId (via getByName).
- * D1 remains durable board storage; this DO is the realtime fan-out + presence layer.
- */
+function isAttachment(value: unknown): value is Attachment {
+  if (typeof value !== "object" || value === null) return false;
+  if (!("clientId" in value) || !("name" in value) || !("color" in value) || !("joinedAt" in value)) {
+    return false;
+  }
+  return (
+    typeof value.clientId === "string" &&
+    typeof value.name === "string" &&
+    typeof value.color === "string" &&
+    typeof value.joinedAt === "number"
+  );
+}
+
 export class WorkspaceSync extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -42,23 +51,23 @@ export class WorkspaceSync extends DurableObject<Env> {
     });
   }
 
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request) {
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("Expected WebSocket", { status: 426 });
     }
 
     const url = new URL(request.url);
-    const projectId = url.searchParams.get("projectId")?.trim();
-    if (!projectId) {
-      return new Response("projectId required", { status: 400 });
+    const workspaceId = url.searchParams.get("workspaceId")?.trim();
+    if (!workspaceId) {
+      return new Response("workspaceId required", { status: 400 });
     }
 
-    const board = await loadBoard(this.env.DB, projectId);
+    const board = await loadBoard(this.env.DB, workspaceId, this.env.AGENT_ID);
     if (!board) {
-      return new Response("Project not found", { status: 404 });
+      return new Response("Workspace not found", { status: 404 });
     }
 
-    this.rememberProjectId(projectId);
+    this.rememberWorkspace(workspaceId, board.project.id);
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -78,10 +87,12 @@ export class WorkspaceSync extends DurableObject<Env> {
 
     const ready: ServerToClientMessage = {
       type: "ready",
-      projectId,
+      workspaceId,
+      projectId: board.project.id,
       seq: this.currentSeq(),
       snapshot: {
         project: board.project,
+        workspace: board.workspace,
         nodes: board.nodes,
         edges: board.edges,
       },
@@ -89,18 +100,14 @@ export class WorkspaceSync extends DurableObject<Env> {
       you: toPeer(attachment),
     };
     server.send(JSON.stringify(ready));
-    this.broadcastPresence(projectId);
+    this.broadcastPresence(workspaceId, board.project.id);
 
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  /** Called by the API worker after a durable mutation lands in D1. */
-  async publish(
-    projectId: string,
-    event: SyncEvent,
-    originClientId: string | null = null,
-  ): Promise<{ seq: number }> {
-    this.rememberProjectId(projectId);
+  async publish(workspaceId: string, event: SyncEvent, originClientId: string | null = null) {
+    const projectId = this.storedProjectId() ?? "";
+    this.rememberWorkspace(workspaceId, projectId || undefined);
     const seq = this.nextSeq();
     const createdAt = Date.now();
     this.ctx.storage.sql.exec(
@@ -114,7 +121,8 @@ export class WorkspaceSync extends DurableObject<Env> {
 
     const message: ServerToClientMessage = {
       type: "event",
-      projectId,
+      workspaceId,
+      projectId: this.storedProjectId() ?? projectId,
       seq,
       originClientId,
       event,
@@ -131,8 +139,8 @@ export class WorkspaceSync extends DurableObject<Env> {
       return;
     }
 
-    const attachment = (ws.deserializeAttachment() ?? null) as Attachment | null;
-    if (!attachment) {
+    const attachment = ws.deserializeAttachment() ?? null;
+    if (!isAttachment(attachment)) {
       this.send(ws, { type: "error", message: "Session not initialized." });
       return;
     }
@@ -147,7 +155,7 @@ export class WorkspaceSync extends DurableObject<Env> {
       attachment.name = parsed.name.trim().slice(0, 40) || attachment.name;
       attachment.color = parsed.color?.trim() || colorForClientId(attachment.clientId);
       ws.serializeAttachment(attachment);
-      this.broadcastPresence(this.storedProjectId() ?? "");
+      this.broadcastPresence(this.storedWorkspaceId() ?? "", this.storedProjectId() ?? "");
       return;
     }
 
@@ -161,7 +169,7 @@ export class WorkspaceSync extends DurableObject<Env> {
         attachment.cursor = parsed.cursor;
       }
       ws.serializeAttachment(attachment);
-      this.broadcastPresence(this.storedProjectId() ?? "");
+      this.broadcastPresence(this.storedWorkspaceId() ?? "", this.storedProjectId() ?? "");
     }
   }
 
@@ -174,28 +182,26 @@ export class WorkspaceSync extends DurableObject<Env> {
     try {
       ws.close(code, reason);
     } catch {
-      // already closed
     }
-    this.broadcastPresence(this.storedProjectId() ?? "");
+    this.broadcastPresence(this.storedWorkspaceId() ?? "", this.storedProjectId() ?? "");
   }
 
   async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
     try {
       ws.close(1011, "error");
     } catch {
-      // ignore
     }
-    this.broadcastPresence(this.storedProjectId() ?? "");
+    this.broadcastPresence(this.storedWorkspaceId() ?? "", this.storedProjectId() ?? "");
   }
 
-  private currentSeq(): number {
+  private currentSeq() {
     const row = this.ctx.storage.sql
       .exec<{ value: string }>(`SELECT value FROM meta WHERE key = 'seq'`)
       .toArray()[0];
     return row ? Number(row.value) || 0 : 0;
   }
 
-  private nextSeq(): number {
+  private nextSeq() {
     const seq = this.currentSeq() + 1;
     this.ctx.storage.sql.exec(
       `INSERT INTO meta (key, value) VALUES ('seq', ?)
@@ -205,22 +211,36 @@ export class WorkspaceSync extends DurableObject<Env> {
     return seq;
   }
 
-  private rememberProjectId(projectId: string): void {
+  private rememberWorkspace(workspaceId: string, projectId?: string) {
     this.ctx.storage.sql.exec(
-      `INSERT INTO meta (key, value) VALUES ('project_id', ?)
+      `INSERT INTO meta (key, value) VALUES ('workspace_id', ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-      projectId,
+      workspaceId,
     );
+    if (projectId) {
+      this.ctx.storage.sql.exec(
+        `INSERT INTO meta (key, value) VALUES ('project_id', ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        projectId,
+      );
+    }
   }
 
-  private storedProjectId(): string | null {
+  private storedWorkspaceId() {
+    const row = this.ctx.storage.sql
+      .exec<{ value: string }>(`SELECT value FROM meta WHERE key = 'workspace_id'`)
+      .toArray()[0];
+    return row?.value ?? null;
+  }
+
+  private storedProjectId() {
     const row = this.ctx.storage.sql
       .exec<{ value: string }>(`SELECT value FROM meta WHERE key = 'project_id'`)
       .toArray()[0];
     return row?.value ?? null;
   }
 
-  private trimEventLog(): void {
+  private trimEventLog() {
     const count = this.ctx.storage.sql
       .exec<{ c: number }>(`SELECT COUNT(*) AS c FROM events`)
       .one().c;
@@ -234,43 +254,42 @@ export class WorkspaceSync extends DurableObject<Env> {
     );
   }
 
-  private listPeers(): SyncPeer[] {
+  private listPeers() {
     const peers: SyncPeer[] = [];
     const seen = new Set<string>();
     for (const ws of this.ctx.getWebSockets()) {
-      const a = ws.deserializeAttachment() as Attachment | null;
-      if (!a?.clientId || seen.has(a.clientId)) continue;
+      const a = ws.deserializeAttachment();
+      if (!isAttachment(a) || seen.has(a.clientId)) continue;
       seen.add(a.clientId);
       peers.push(toPeer(a));
     }
     return peers;
   }
 
-  private broadcastPresence(projectId: string): void {
-    if (!projectId) return;
+  private broadcastPresence(workspaceId: string, projectId: string) {
+    if (!workspaceId) return;
     const message: ServerToClientMessage = {
       type: "presence",
+      workspaceId,
       projectId,
       peers: this.listPeers(),
     };
     this.broadcast(JSON.stringify(message));
   }
 
-  private broadcast(payload: string): void {
+  private broadcast(payload: string) {
     for (const ws of this.ctx.getWebSockets()) {
       try {
         ws.send(payload);
       } catch {
-        // drop dead sockets
       }
     }
   }
 
-  private send(ws: WebSocket, message: ServerToClientMessage): void {
+  private send(ws: WebSocket, message: ServerToClientMessage) {
     try {
       ws.send(JSON.stringify(message));
     } catch {
-      // ignore
     }
   }
 }

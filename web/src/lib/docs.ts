@@ -1,4 +1,3 @@
-/** Kickoff + canvas document uploads: images and PDFs only. */
 export const PROJECT_DOC_ACCEPT =
   "image/png,image/jpeg,image/jpg,image/gif,image/webp,image/avif,image/svg+xml,.pdf,application/pdf";
 

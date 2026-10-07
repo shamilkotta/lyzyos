@@ -12,10 +12,5 @@
     "forceConsistentCasingInFileNames": true,
     "moduleDetection": "force"
   },
-  "include": [
-    "src",
-    "test",
-    "worker-configuration.d.ts",
-    "node_modules/@cloudflare/vitest-plugin/types/cloudflare-test.d.ts"
-  ]
+  "include": ["src", "worker-configuration.d.ts"]
 }

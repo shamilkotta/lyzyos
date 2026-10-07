@@ -11,10 +11,10 @@ type Props = {
   onCollapsedChange: (collapsed: boolean) => void;
   onClose?: () => void;
   children: ReactNode;
+  footer?: ReactNode;
   className?: string;
 };
 
-/** Independent floating inspector — not docked to the viewport edge. */
 export function FloatingPanel({
   title,
   subtitle,
@@ -22,6 +22,7 @@ export function FloatingPanel({
   onCollapsedChange,
   onClose,
   children,
+  footer,
   className,
 }: Props) {
   return (
@@ -62,7 +63,12 @@ export function FloatingPanel({
       </div>
 
       {!collapsed ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">{children}</div>
+        <>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">{children}</div>
+          {footer ? (
+            <div className="shrink-0 border-t border-border bg-surface/95 px-3 py-3">{footer}</div>
+          ) : null}
+        </>
       ) : null}
     </aside>
   );

@@ -1,1 +1,8 @@
-export { authClient, signIn, signUp, signOut, useSession, getSession } from "@lyzyos/auth/client";
+export {
+  signIn,
+  signUp,
+  signOut,
+  useSession,
+  requestPasswordReset,
+  resetPassword,
+} from "@lyzyos/auth/client";

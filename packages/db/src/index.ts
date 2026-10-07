@@ -3,15 +3,21 @@ export * from "./store";
 export * from "./r2";
 export * from "./client";
 export * from "./sync";
-export * from "./users";
-export * from "./auth-schema";
+export * from "./auth.schema";
+export * from "./comments";
+export * from "./constants";
+
 export {
   projects,
+  workspaces,
   documents,
-  planningNodes,
+  comments,
+  notes,
+  nodes,
   nodeEdges,
+  workspaceMembers,
+  projectMembers,
   schema as appSchema,
-  planningNodeKinds,
-  authorKinds,
-  planningStatuses,
-} from "./schema";
+  nodeKinds,
+  status,
+} from "./project.schema";

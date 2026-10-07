@@ -11,15 +11,22 @@
     "port": 8788,
   },
   "vars": {
-    "AGENT_ORIGIN": "http://127.0.0.1:8787",
     "BETTER_AUTH_URL": "http://localhost:3000",
     "WEB_ORIGIN": "http://localhost:3000",
+    "AGENT_ID": "123-321",
   },
+  "services": [
+    {
+      "binding": "AGENT",
+      "service": "lyzy",
+    },
+  ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "lyzy",
       "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "../packages/db/migrations",
     },
   ],
   "r2_buckets": [

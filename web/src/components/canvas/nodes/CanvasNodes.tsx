@@ -43,18 +43,17 @@ export type ItemNodeData = {
   label?: string;
 };
 
-/** Planning workspace cards — same chrome as project-home department nodes */
-export type PlanningCardAction = {
+export type WorkspaceCardAction = {
   tone: StatusTone;
-  variant: "needs_reply" | "answered";
+  variant: "needs_reply" | "resolved";
 };
 
-export type PlanningCardData = {
-  kind: "planning";
+export type WorkspaceCardData = {
+  kind: "board";
   title: string;
   summary: string;
   typeLabel: string;
-  action?: PlanningCardAction;
+  action?: WorkspaceCardAction;
   members: Member[];
   attention?: string;
   icon: "note" | "comment" | "doc";
@@ -66,7 +65,7 @@ export type PlanningCardData = {
   };
 };
 
-export type BoardNodeData = DepartmentNodeData | ItemNodeData | PlanningCardData;
+export type BoardNodeData = DepartmentNodeData | ItemNodeData | WorkspaceCardData;
 export type BoardNode = Node<BoardNodeData>;
 
 function NodeShell({
@@ -123,7 +122,7 @@ function statusLabel(status: WorkStatus) {
   }
 }
 
-const planningActionTone: Record<StatusTone, string> = {
+const workspaceActionTone: Record<StatusTone, string> = {
   neutral: "bg-surface-soft text-ink-secondary",
   ok: "bg-pale-green text-pale-green-ink",
   warn: "bg-pale-yellow text-pale-yellow-ink",
@@ -131,48 +130,74 @@ const planningActionTone: Record<StatusTone, string> = {
   info: "bg-pale-blue text-pale-blue-ink",
 };
 
-function MemberAvatar({ member, size = "sm" }: { member: Member; size?: "sm" | "md" }) {
+export function MemberAvatar({ member, size = "sm" }: { member: Member; size?: "sm" | "md" }) {
   const dim = size === "md" ? "h-6 w-6 text-[9px]" : "h-5 w-5 text-[8px]";
   return (
     <span
       title={`${member.name} · ${member.role}`}
       className={clsx(
-        "flex shrink-0 items-center justify-center rounded-full border border-surface font-medium leading-none",
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-surface bg-canvas font-medium leading-none text-ink",
         dim,
-        member.kind === "agent" ? "bg-pale-blue text-pale-blue-ink" : "bg-canvas text-ink",
       )}
     >
-      {member.initials}
+      {member.image ? (
+        // oxlint-disable-next-line next/no-img-element
+        <img src={member.image} alt="" className="h-full w-full object-cover" />
+      ) : (
+        member.initials
+      )}
     </span>
   );
 }
 
-function MemberStack({ members }: { members: Member[] }) {
+export function MemberStack({
+  members,
+  size = "sm",
+  max = 3,
+}: {
+  members: Member[];
+  size?: "sm" | "md";
+  max?: number;
+}) {
+  const dim = size === "md" ? "h-6 w-6 text-[9px]" : "h-5 w-5 text-[8px]";
+  const visible = members.slice(0, max);
+  const overflow = members.length - visible.length;
+
   return (
     <div className="flex items-center">
-      {members.slice(0, 4).map((m, i) => (
+      {visible.map((m, i) => (
         <span
           key={m.id}
           title={`${m.name} · ${m.role}`}
           className={clsx(
-            "flex h-5 w-5 items-center justify-center rounded-full border border-surface text-[8px] font-medium leading-none",
-            m.kind === "agent" ? "bg-pale-blue text-pale-blue-ink" : "bg-canvas text-ink",
-            i > 0 && "-ml-1",
+            "flex items-center justify-center overflow-hidden rounded-full border border-surface bg-canvas font-medium leading-none text-ink",
+            dim,
+            i > 0 && "-ml-2.5",
           )}
         >
-          {m.initials}
+          {m.image ? (
+            // oxlint-disable-next-line next/no-img-element
+            <img src={m.image} alt="" className="h-full w-full object-cover" />
+          ) : (
+            m.initials
+          )}
         </span>
       ))}
-      {members.length > 4 ? (
-        <span className="-ml-1 flex h-5 w-5 items-center justify-center rounded-full border border-surface bg-surface-soft text-[8px] text-ink-tertiary">
-          +{members.length - 4}
+      {overflow > 0 ? (
+        <span
+          title={`${overflow} more`}
+          className={clsx(
+            "-ml-2.5 flex items-center justify-center rounded-full border border-surface bg-surface-soft font-medium leading-none text-ink-tertiary",
+            dim,
+          )}
+        >
+          +{overflow}
         </span>
       ) : null}
     </div>
   );
 }
 
-/** Shared footer for project-home department cards and planning workspace cards */
 function CardNodeFooter({ members, action }: { members: Member[]; action?: ReactNode }) {
   return (
     <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-1 pb-2">
@@ -242,23 +267,16 @@ export function DepartmentNode({ data, selected }: NodeProps<Node<DepartmentNode
 function AuthorRow({
   name,
   initials,
-  kind,
   meta,
 }: {
   name?: string;
   initials?: string;
-  kind?: "human" | "agent";
   meta?: string;
 }) {
   if (!name) return null;
   return (
     <div className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-tertiary">
-      <span
-        className={clsx(
-          "flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-medium",
-          kind === "agent" ? "bg-pale-blue text-pale-blue-ink" : "bg-canvas text-ink",
-        )}
-      >
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-canvas text-[8px] font-medium text-ink">
         {initials}
       </span>
       <span className="truncate text-ink-secondary">{name}</span>
@@ -284,7 +302,6 @@ export function WorkNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
       <AuthorRow
         name={data.authorName}
         initials={data.authorInitials}
-        kind={data.authorKind}
         meta={data.meta && !data.tone ? data.meta : undefined}
       />
     </NodeShell>
@@ -304,7 +321,7 @@ export function AssetNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
       <h3 className="truncate text-[13px] font-medium text-ink">{data.title}</h3>
       {data.body ? <p className="mt-1 text-[12px] text-ink-secondary">{data.body}</p> : null}
       <div className="mt-3 h-14 rounded-[6px] border border-border bg-canvas" />
-      <AuthorRow name={data.authorName} initials={data.authorInitials} kind={data.authorKind} />
+      <AuthorRow name={data.authorName} initials={data.authorInitials} />
     </NodeShell>
   );
 }
@@ -320,12 +337,7 @@ export function CommentNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
         </span>
       </div>
       <p className="truncate text-[13px] leading-relaxed text-ink">{data.title}</p>
-      <AuthorRow
-        name={data.authorName}
-        initials={data.authorInitials}
-        kind={data.authorKind}
-        meta={data.meta}
-      />
+      <AuthorRow name={data.authorName} initials={data.authorInitials} meta={data.meta} />
     </NodeShell>
   );
 }
@@ -344,7 +356,7 @@ export function NoteNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
           {data.body}
         </p>
       ) : null}
-      <AuthorRow name={data.authorName} initials={data.authorInitials} kind={data.authorKind} />
+      <AuthorRow name={data.authorName} initials={data.authorInitials} />
     </NodeShell>
   );
 }
@@ -354,7 +366,7 @@ function DocPreview({
   title,
   className,
 }: {
-  preview: NonNullable<PlanningCardData["preview"]>;
+  preview: NonNullable<WorkspaceCardData["preview"]>;
   title?: string;
   className?: string;
 }) {
@@ -413,28 +425,31 @@ function DocPreview({
   );
 }
 
-function PlanningActionIcon({ action }: { action: PlanningCardAction }) {
-  const label = action.variant === "answered" ? "Answered" : "Needs reply";
-  const Icon = action.variant === "answered" ? CheckCircle : WarningCircle;
+// Attention / resolved icon — re-enable with open/resolve APIs.
+function WorkspaceActionIcon({ action }: { action: WorkspaceCardAction }) {
+  const label = action.variant === "resolved" ? "Resolved" : "Needs reply";
+  const Icon = action.variant === "resolved" ? CheckCircle : WarningCircle;
   return (
     <span
       title={label}
       aria-label={label}
       className={clsx(
         "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
-        planningActionTone[action.tone],
+        workspaceActionTone[action.tone],
       )}
     >
       <Icon size={13} weight="fill" />
     </span>
   );
 }
+void WorkspaceActionIcon;
 
-export function PlanningCardNode({ data, selected }: NodeProps<Node<PlanningCardData>>) {
+export function WorkspaceCardNode({ data, selected }: NodeProps<Node<WorkspaceCardData>>) {
   const KindIcon =
     data.icon === "doc" ? Cube : data.icon === "comment" ? ChatCircleText : NoteBlank;
   const author = data.members[0];
   const isDoc = data.icon === "doc";
+  const isComment = data.icon === "comment";
   const showTitle = data.title.trim().length > 0;
 
   return (
@@ -448,9 +463,15 @@ export function PlanningCardNode({ data, selected }: NodeProps<Node<PlanningCard
             </span>
             <span className="truncate">{data.typeLabel}</span>
           </span>
-          {data.action ? <PlanningActionIcon action={data.action} /> : null}
+          {/* Attention / resolved — re-enable with open/resolve APIs.
+          {data.action ? <WorkspaceActionIcon action={data.action} /> : null}
+          */}
         </div>
-        {author ? <MemberAvatar member={author} size="md" /> : null}
+        {isComment && data.members.length > 0 ? (
+          <MemberStack members={data.members} size="md" max={3} />
+        ) : author ? (
+          <MemberAvatar member={author} size="md" />
+        ) : null}
       </div>
 
       {showTitle ? (
@@ -477,11 +498,13 @@ export function PlanningCardNode({ data, selected }: NodeProps<Node<PlanningCard
         />
       ) : null}
 
+      {/* Attention callout — re-enable with open/resolve APIs.
       {data.attention ? (
         <p className="mt-2 rounded-[6px] bg-pale-yellow px-2 py-1.5 text-[11px] leading-snug text-pale-yellow-ink">
           {data.attention}
         </p>
       ) : null}
+      */}
     </NodeShell>
   );
 }
@@ -498,7 +521,7 @@ export function InstructionNode({ data, selected }: NodeProps<Node<ItemNodeData>
       {data.body ? (
         <p className="mt-1 text-[12px] leading-relaxed text-ink-secondary">{data.body}</p>
       ) : null}
-      <AuthorRow name={data.authorName} initials={data.authorInitials} kind={data.authorKind} />
+      <AuthorRow name={data.authorName} initials={data.authorInitials} />
     </NodeShell>
   );
 }
@@ -515,7 +538,7 @@ export function BlockerNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
       {data.body ? (
         <p className="mt-1.5 text-[12px] leading-relaxed text-pale-red-ink">{data.body}</p>
       ) : null}
-      <AuthorRow name={data.authorName} initials={data.authorInitials} kind={data.authorKind} />
+      <AuthorRow name={data.authorName} initials={data.authorInitials} />
     </NodeShell>
   );
 }
@@ -533,6 +556,6 @@ export const branchNodeTypes = {
   blocker: BlockerNode,
 };
 
-export const planningNodeTypes = {
-  planning: PlanningCardNode,
+export const workspaceNodeTypes = {
+  board: WorkspaceCardNode,
 };

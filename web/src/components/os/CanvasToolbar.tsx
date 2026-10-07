@@ -35,8 +35,7 @@ type ToolDef = {
 type Props = {
   tool: CanvasTool;
   onTool: (tool: CanvasTool) => void;
-  /** Overview mode only needs navigation tools */
-  mode: "overview" | "branch" | "planning";
+  mode: "overview" | "branch" | "workspace";
 };
 
 const TOOL_SHORTCUTS: Record<CanvasTool, string> = {
@@ -64,7 +63,7 @@ const branchTools: ToolDef[] = [
 
 const overviewTools = branchTools.filter((t) => ["select", "hand"].includes(t.id));
 
-const planningTools: ToolDef[] = [
+const workspaceTools: ToolDef[] = [
   { id: "select", label: "Select", shortcut: TOOL_SHORTCUTS.select, icon: Cursor },
   { id: "hand", label: "Pan", shortcut: TOOL_SHORTCUTS.hand, icon: HandGrabbing },
   { id: "comment", label: "Comment", shortcut: TOOL_SHORTCUTS.comment, icon: ChatCircleText },
@@ -74,7 +73,7 @@ const planningTools: ToolDef[] = [
 
 function toolsForMode(mode: Props["mode"]): ToolDef[] {
   if (mode === "overview") return overviewTools;
-  if (mode === "planning") return planningTools;
+  if (mode === "workspace") return workspaceTools;
   return branchTools;
 }
 

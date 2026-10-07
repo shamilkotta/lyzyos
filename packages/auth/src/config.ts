@@ -5,6 +5,20 @@ export const authConfig = {
   appName: "Lyzy",
   emailAndPassword: {
     enabled: true,
+    minPasswordLength: 8,
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, url }) => {
+      // Swap for Resend/etc. when email delivery is wired.
+      console.info(`[lyzy-auth] password reset for ${user.email}: ${url}`);
+    },
+  },
+  session: {
+    expiresIn: 60 * 60 * 24 * 7,
+    updateAge: 60 * 60 * 24,
+    cookieCache: {
+      enabled: true,
+      maxAge: 60 * 5,
+    },
   },
 } satisfies BetterAuthOptions;
 

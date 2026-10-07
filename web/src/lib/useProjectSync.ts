@@ -6,25 +6,24 @@ import {
   applySyncEvent,
   getClientName,
   getOrCreateClientId,
-  projectSyncWsUrl,
+  parseServerMessage,
   snapshotToBoardState,
+  workspaceSyncWsUrl,
   type ClientToServerMessage,
-  type ServerToClientMessage,
   type SyncPeer,
 } from "./sync-protocol";
 
 type Options = {
-  projectId: string;
+  workspaceId: string;
   enabled?: boolean;
   onBoard: (updater: (prev: BoardState | null) => BoardState | null) => void;
-  /** Skip applying events that originated from this tab (optimistic already applied). */
   skipOwnEvents?: boolean;
 };
 
 export type SyncConnectionStatus = "connecting" | "live" | "reconnecting" | "offline";
 
 export function useProjectSync({
-  projectId,
+  workspaceId,
   enabled = true,
   onBoard,
   skipOwnEvents = true,
@@ -42,7 +41,7 @@ export function useProjectSync({
   }, [onBoard]);
 
   useEffect(() => {
-    if (!enabled || !projectId) return;
+    if (!enabled || !workspaceId) return;
 
     let closed = false;
     let retryMs = 800;
@@ -54,7 +53,7 @@ export function useProjectSync({
       setStatus((s) => (s === "live" ? "live" : "connecting"));
 
       const ws = new WebSocket(
-        projectSyncWsUrl(projectId, {
+        workspaceSyncWsUrl(workspaceId, {
           clientId,
           name: getClientName(),
         }),
@@ -78,12 +77,8 @@ export function useProjectSync({
       };
 
       ws.onmessage = (ev) => {
-        let msg: ServerToClientMessage;
-        try {
-          msg = JSON.parse(String(ev.data)) as ServerToClientMessage;
-        } catch {
-          return;
-        }
+        const msg = parseServerMessage(String(ev.data));
+        if (!msg) return;
 
         if (msg.type === "ready") {
           seqRef.current = msg.seq;
@@ -137,7 +132,7 @@ export function useProjectSync({
       setStatus("offline");
       setPeers([]);
     };
-  }, [clientId, enabled, projectId, skipOwnEvents]);
+  }, [clientId, enabled, workspaceId, skipOwnEvents]);
 
   const publishPresence = (selectedId: string | null) => {
     selectedIdRef.current = selectedId;

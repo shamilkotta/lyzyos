@@ -8,24 +8,26 @@ import {
   membersForDepartment,
 } from "@/lib/data";
 import type { DepartmentId } from "@/lib/types";
-import type { BoardNodeData } from "./nodes/CanvasNodes";
+import type { BoardNodeData, DepartmentNodeData } from "./nodes/CanvasNodes";
 
-export function buildApiProjectOverviewNodes(projectName: string): Node<BoardNodeData>[] {
+export function buildApiProjectOverviewNodes(
+  projectName: string,
+  workspaceLabel = "Workspace",
+): Node<BoardNodeData>[] {
   return [
     {
-      id: "planning",
+      id: "workspace",
       type: "department",
       position: { x: 340, y: 280 },
       data: {
-        kind: "department" as const,
-        title: "Planning",
-        summary: `${projectName} · intake and discovery with Lyzy`,
+        kind: "department",
+        title: workspaceLabel,
+        summary: `${projectName} · open to collaborate with Lyzy`,
         tone: "info",
         status: "in_progress",
-        members: membersForDepartment("planning"),
-        attention: "Lyzy is structuring the brief",
+        members: [],
         openLabel: "Open",
-      },
+      } satisfies DepartmentNodeData,
     },
   ];
 }
@@ -40,7 +42,7 @@ export function buildOverviewNodes(): Node<BoardNodeData>[] {
     type: "department",
     position: departmentLayout[dept.id],
     data: {
-      kind: "department" as const,
+      kind: "department",
       title: dept.name,
       summary: dept.summary,
       tone: dept.tone,
@@ -48,7 +50,7 @@ export function buildOverviewNodes(): Node<BoardNodeData>[] {
       members: membersForDepartment(dept.id),
       branchCount: dept.branches?.length,
       attention: dept.attention,
-    },
+    } satisfies DepartmentNodeData,
   }));
 }
 
