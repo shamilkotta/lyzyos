@@ -4,16 +4,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-05",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": {
-    "enabled": true,
-  },
-  "dev": {
-    "port": 8787,
-  },
-  "ai": {
-    "binding": "AI",
-    "remote": true,
-  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -29,14 +19,7 @@
     },
   ],
   "durable_objects": {
-    "bindings": [
-      { "name": "AGENT", "class_name": "Lyzy" },
-      {
-        "name": "WORKSPACE_SYNC",
-        "class_name": "WorkspaceSync",
-        "script_name": "lyzy-api",
-      },
-    ],
+    "bindings": [{ "name": "AGENT", "class_name": "Lyzy" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Lyzy"] }],
 }

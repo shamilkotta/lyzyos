@@ -56,6 +56,16 @@ describe("Lyzy", () => {
     expect((await agent.recall("crimson")).matches).toBe("");
   });
 
+  it("can replace project memory after correcting a fact", async () => {
+    const id = crypto.randomUUID();
+    const agent = env.AGENT.getByName(id);
+    await agent.learn("The launch is in May.");
+    await agent.replaceMemory("- The launch is in June.");
+    await evictDurableObject(agent);
+
+    expect((await env.AGENT.getByName(id).known()).memory).toBe("- The launch is in June.");
+  });
+
   it("keeps separate transcripts on one shared memory", async () => {
     const id = crypto.randomUUID();
     const agent = env.AGENT.getByName(id);

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev -c ../api/wrangler.jsonc -c wrangler.jsonc --port 8788 --persist-to ../.wrangler/state",
     "check": "wrangler types && tsc --noEmit",
     "types": "wrangler types",
     "test": "vitest run",
@@ -12,6 +12,7 @@
   "dependencies": {
     "@cloudflare/think": "0.20.0",
     "@lyzyos/db": "workspace:*",
+    "@lyzyos/utils": "workspace:*",
     "agents": "0.26.0",
     "ai": "^7.0.127",
     "zod": "^4.6.5"
