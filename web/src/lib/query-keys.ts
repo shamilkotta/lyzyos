@@ -1,0 +1,9 @@
+export const queryKeys = {
+  projects: {
+    all: ["projects"] as const,
+    detail: (projectId: string) => ["projects", projectId] as const,
+    workspaces: (projectId: string) => ["projects", projectId, "workspaces"] as const,
+    board: (projectId: string, workspaceId: string) =>
+      ["projects", projectId, "board", workspaceId] as const,
+  },
+};

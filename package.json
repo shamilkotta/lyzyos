@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "pnpm --parallel --filter web --filter api run dev",
     "lint": "pnpm -r --if-present lint",
     "lint:fix": "pnpm -r --if-present lint -- --fix",
     "format": "oxfmt .",
@@ -11,8 +12,8 @@
     "web": "pnpm --filter web",
     "agent": "pnpm --filter agent",
     "api": "pnpm --filter api",
-    "auth:generate": "pnpm --filter @lyzyos/auth auth:generate",
-    "db:generate": "pnpm --filter @lyzyos/db generate"
+    "db": "pnpm --filter @lyzyos/db",
+    "utils": "pnpm --filter @lyzyos/utils"
   },
   "devDependencies": {
     "oxfmt": "^0.71.0",

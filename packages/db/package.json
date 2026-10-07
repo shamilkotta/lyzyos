@@ -6,8 +6,8 @@
     ".": "./src/index.ts",
     "./types": "./src/types.ts",
     "./store": "./src/store.ts",
-    "./schema": "./src/schema.ts",
-    "./auth-schema": "./src/auth-schema.ts",
+    "./schema": "./src/project.schema.ts",
+    "./auth-schema": "./src/auth.schema.ts",
     "./client": "./src/client.ts",
     "./r2": "./src/r2.ts",
     "./sync": "./src/sync.ts",
@@ -16,15 +16,22 @@
   "scripts": {
     "lint": "oxlint .",
     "generate": "drizzle-kit generate",
+    "migrate": "wrangler d1 migrations apply lyzy --local --persist-to ../../.wrangler/state --config ../../api/wrangler.jsonc",
+    "migrate:remote": "wrangler d1 migrations apply lyzy --remote --config ../../api/wrangler.jsonc",
+    "migrate:list": "wrangler d1 migrations list lyzy --local --persist-to ../../.wrangler/state --config ../../api/wrangler.jsonc",
+    "migrate:list:remote": "wrangler d1 migrations list lyzy --remote --config ../../api/wrangler.jsonc",
+    "reset": "rm -rf ../../.wrangler/state/v3/d1 ../../api/.wrangler/state/v3/d1 ../../agent/.wrangler/state/v3/d1 ../../web/.wrangler/state/v3/d1 && CI=1 wrangler d1 migrations apply lyzy --local --persist-to ../../.wrangler/state --config ../../api/wrangler.jsonc",
     "auth:generate": "pnpm --filter @lyzyos/auth auth:generate",
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.1"
+    "drizzle-orm": "^0.45.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261004.1",
     "drizzle-kit": "^0.31.10",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "^4.147.0"
   }
 }

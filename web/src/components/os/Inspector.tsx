@@ -97,7 +97,7 @@ function CampaignPulse() {
       </div>
 
       <p className="text-[13px] leading-relaxed text-ink-secondary">
-        Double-click a department to enter its workspace. People and agents work inside those rooms
+        Double-click a department to enter its workspace. Teammates work inside those rooms
         — they are not separate steps on the graph.
       </p>
 
@@ -281,8 +281,8 @@ function ItemDetail({
         <p className="text-[13px] leading-relaxed text-ink-secondary">{selection.subtitle}</p>
       ) : null}
       <p className="text-[12px] text-ink-tertiary">
-        Part of this department’s board. Anyone on the team — human or agent — can leave comments,
-        notes, and instructions here.
+        Part of this department’s board. Anyone on the team can leave comments, notes, and
+        instructions here.
       </p>
     </div>
   );
@@ -292,27 +292,17 @@ function MemberDetail({ member }: { member: Member }) {
   return (
     <div className="fade-up space-y-4">
       <div className="flex items-center gap-3">
-        <span
-          className={clsx(
-            "flex h-10 w-10 items-center justify-center rounded-full text-[12px] font-medium",
-            member.kind === "agent" ? "bg-pale-blue text-pale-blue-ink" : "bg-canvas text-ink",
-          )}
-        >
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-canvas text-[12px] font-medium text-ink">
           {member.initials}
         </span>
         <div>
           <h2 className="text-[16px] font-medium text-ink">{member.name}</h2>
-          <p className="text-[12px] text-ink-secondary">
-            {member.role}
-            {member.kind === "agent" ? " · Agent teammate" : " · Human"}
-          </p>
+          <p className="text-[12px] text-ink-secondary">{member.role}</p>
         </div>
       </div>
 
       <p className="text-[13px] leading-relaxed text-ink-secondary">
-        {member.kind === "agent"
-          ? "Works the same rooms as everyone else — drafts, checks, comments, and handoffs. Cannot publish or give final legal approval."
-          : "Makes decisions that move the campaign forward: approvals, direction, and exceptions."}
+        Works the same rooms as everyone else — drafts, checks, comments, and handoffs.
       </p>
 
       <div>
@@ -364,12 +354,7 @@ function MemberRow({ member }: { member: Member }) {
   return (
     <li className="flex items-center justify-between gap-2 rounded-[8px] border border-border px-3 py-2">
       <div className="flex items-center gap-2 min-w-0">
-        <span
-          className={clsx(
-            "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-medium",
-            member.kind === "agent" ? "bg-pale-blue text-pale-blue-ink" : "bg-canvas text-ink",
-          )}
-        >
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-canvas text-[9px] font-medium text-ink">
           {member.initials}
         </span>
         <div className="min-w-0">

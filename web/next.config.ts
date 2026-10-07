@@ -1,15 +1,11 @@
+import path from "node:path";
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-const apiOrigin = process.env.API_DEV_ORIGIN ?? "http://127.0.0.1:8788";
-const agentOrigin = process.env.AGENT_DEV_ORIGIN ?? "http://127.0.0.1:8787";
-
-const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      { source: "/api/:path*", destination: `${apiOrigin}/api/:path*` },
-      { source: "/agents/:path*", destination: `${agentOrigin}/agents/:path*` },
-    ];
-  },
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;
+
+initOpenNextCloudflareForDev({
+  persist: { path: path.resolve(__dirname, "../.wrangler/state/v3") },
+});

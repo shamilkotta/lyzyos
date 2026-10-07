@@ -1,50 +1,86 @@
-export type PlanningNodeKind = "brief" | "doc" | "note" | "question" | "summary" | "answer";
+import {
+  isCommentNode,
+  isDocNode,
+  isNoteNode,
+  type BoardEdge,
+  type CommentNodeDto,
+  type DocNodeDto,
+  type DocPreviewKind,
+  type NodeAuthor,
+  type NodeDto,
+  type NoteNodeDto,
+  type ProjectDto,
+  type WorkspaceBoard,
+  type WorkspaceDto,
+} from "@lyzyos/db";
 
-export type DocPreviewKind = "image" | "pdf" | "video" | "audio" | "text" | "file";
+export type { BoardEdge, CommentNodeDto, DocNodeDto, DocPreviewKind, NoteNodeDto };
+export type BoardNode = NodeDto;
+export type PlanningNode = NodeDto;
+export type BoardNodeKind = NodeDto["kind"];
+export type ProjectStatus = ProjectDto["status"];
+export type Project = ProjectDto;
+export type Workspace = WorkspaceDto & { project?: Project };
+export type ApiAuthor = NodeAuthor;
+export type ApiProjectListItem = Project;
+export type ApiProjectDetail = Project & { workspaces: Workspace[] };
+export type ApiWorkspaceListItem = Workspace & { project: Project };
+export type ApiWorkspaceBoard = WorkspaceBoard;
 
-export type PlanningNode = {
-  id: string;
-  kind: PlanningNodeKind;
-  title: string;
-  body: string;
-  authorKind: "human" | "agent";
-  authorName: string;
-  status?: string;
-  meta?: string;
-  docId?: string;
-  mime?: string;
-  previewKind?: DocPreviewKind;
-  x: number;
-  y: number;
-  createdAt: number;
-  updatedAt: number;
-};
-
-export type Project = {
-  id: string;
-  name: string;
-  brief: string;
-  ownerId: string;
-  threadId: string | null;
-  planningStatus: "in_progress" | "complete";
-  createdAt: number;
-  updatedAt: number;
-};
+export type AgentStatus = "idle" | "thinking" | "ready" | "error";
 
 export type BoardState = {
   projectId: string;
+  workspace: Workspace;
   projectName: string;
-  planningStatus: "in_progress" | "complete";
-  threadId: string | null;
-  nodes: PlanningNode[];
-  edges: { id: string; sourceId: string; targetId: string }[];
-  agentStatus: "idle" | "thinking" | "ready" | "error";
+  status: ProjectStatus;
+  nodes: BoardNode[];
+  edges: BoardEdge[];
+  members: ApiAuthor[];
+  agentId: string;
+  agentStatus: AgentStatus;
   agentMessage?: string;
 };
 
-export type ApiProjectListItem = Project;
+export { isCommentNode, isDocNode, isNoteNode };
 
 export function documentFileUrl(projectId: string, docId: string) {
-  const base = process.env.NEXT_PUBLIC_API_BASE ?? "";
-  return `${base}/api/projects/${projectId}/documents/${docId}/file`;
+  return `/api/projects/${projectId}/documents/${docId}/file`;
+}
+
+function dedupeAuthors(authors: ApiAuthor[]) {
+  const byId = new Map<string, ApiAuthor>();
+  for (const author of authors) {
+    if (!author.id || byId.has(author.id)) continue;
+    byId.set(author.id, {
+      id: author.id,
+      name: author.name,
+      image: author.image ?? null,
+    });
+  }
+  return [...byId.values()];
+}
+
+export function toBoardState(
+  board: Pick<WorkspaceBoard, "project" | "workspace" | "nodes" | "edges"> & {
+    members?: ApiAuthor[];
+    agentId?: string;
+  },
+  prev?: BoardState | null,
+) {
+  return {
+    projectId: board.project.id,
+    workspace: {
+      ...board.workspace,
+      project: board.project,
+    },
+    projectName: board.project.name,
+    status: board.project.status,
+    nodes: board.nodes,
+    edges: board.edges,
+    members: dedupeAuthors(board.members ?? prev?.members ?? []),
+    agentId: board.agentId ?? prev?.agentId ?? "",
+    agentStatus: prev?.agentStatus ?? "idle",
+    agentMessage: prev?.agentMessage,
+  } satisfies BoardState;
 }

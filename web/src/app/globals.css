@@ -45,9 +45,11 @@
   --color-pale-green-ink: var(--pale-green-ink);
   --color-pale-yellow: var(--pale-yellow);
   --color-pale-yellow-ink: var(--pale-yellow-ink);
-  --font-sans: var(--font-geist-sans);
+  /* Geist Mono is the UI typeface; `font-sans` maps to it so Tailwind defaults match. */
+  --font-sans: var(--font-geist-mono);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-instrument);
+  --font-brand: var(--font-space-grotesk);
 }
 
 * {
@@ -63,7 +65,7 @@ body {
 body {
   background: var(--canvas);
   color: var(--ink);
-  font-family: var(--font-geist-sans), "Helvetica Neue", sans-serif;
+  font-family: var(--font-geist-mono), "SF Mono", ui-monospace, monospace;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }

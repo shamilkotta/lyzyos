@@ -3,19 +3,21 @@ const ALLOW_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 
 export function corsHeaders(origin: string | null): HeadersInit {
   const allowed =
-    origin && (origin.includes("localhost") || origin.includes("127.0.0.1")) ? origin : "*";
+    origin && (origin.includes("localhost") || origin.includes("127.0.0.1")) ? origin : null;
   return {
-    "Access-Control-Allow-Origin": allowed,
+    ...(allowed
+      ? {
+          "Access-Control-Allow-Origin": allowed,
+          "Access-Control-Allow-Credentials": "true",
+        }
+      : { "Access-Control-Allow-Origin": "*" }),
     "Access-Control-Allow-Methods": ALLOW_METHODS,
     "Access-Control-Allow-Headers": ALLOW_HEADERS,
   };
 }
 
-export function json(data: unknown, init: ResponseInit = {}, origin: string | null = null) {
+export function json(data: unknown, init: ResponseInit = {}) {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
-  for (const [key, value] of Object.entries(corsHeaders(origin))) {
-    headers.set(key, value);
-  }
   return new Response(JSON.stringify(data), { ...init, headers });
 }

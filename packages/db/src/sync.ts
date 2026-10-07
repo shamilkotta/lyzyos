@@ -1,64 +1,96 @@
-import type { BoardState, PlanningNodeDto, ProjectDto } from "./types";
+import { z } from "zod";
+import {
+  boardEdgeSchema,
+  memberPreviewSchema,
+  nodeDtoSchema,
+  projectDtoSchema,
+  workspaceDtoSchema,
+} from "./types";
 
-/** Stable entity kinds — every record uses a UUID primary key. */
-export const entityKinds = ["project", "document", "node", "edge", "client"] as const;
+export const boardSnapshotSchema = z.object({
+  project: projectDtoSchema,
+  workspace: workspaceDtoSchema,
+  nodes: z.array(nodeDtoSchema),
+  edges: z.array(boardEdgeSchema),
+});
+export type BoardSnapshot = z.infer<typeof boardSnapshotSchema>;
 
-export type EntityKind = (typeof entityKinds)[number];
+const pointSchema = z.object({ x: z.number(), y: z.number() }).strict();
 
-export type BoardSnapshot = {
-  project: ProjectDto;
-  nodes: PlanningNodeDto[];
-  edges: { id: string; sourceId: string; targetId: string }[];
-};
+export const syncPeerSchema = z.object({
+  clientId: z.string(),
+  name: z.string(),
+  color: z.string(),
+  selectedId: z.string().optional(),
+  cursor: pointSchema.optional(),
+  joinedAt: z.number(),
+});
+export type SyncPeer = z.infer<typeof syncPeerSchema>;
 
-export type SyncPeer = {
-  clientId: string;
-  name: string;
-  color: string;
-  selectedId?: string;
-  cursor?: { x: number; y: number };
-  joinedAt: number;
-};
+export const syncEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("board.replace"), board: boardSnapshotSchema }),
+  z.object({ type: z.literal("project.updated"), project: projectDtoSchema }),
+  z.object({ type: z.literal("node.upserted"), node: nodeDtoSchema }),
+  z.object({ type: z.literal("node.removed"), nodeId: z.string() }),
+  z.object({ type: z.literal("edge.upserted"), edge: boardEdgeSchema }),
+  z.object({ type: z.literal("edge.removed"), edgeId: z.string() }),
+]);
+export type SyncEvent = z.infer<typeof syncEventSchema>;
 
-/** Durable board mutations fan out through WorkspaceSync. */
-export type SyncEvent =
-  | { type: "board.replace"; board: BoardSnapshot }
-  | { type: "project.updated"; project: ProjectDto }
-  | { type: "node.upserted"; node: PlanningNodeDto }
-  | { type: "node.removed"; nodeId: string }
-  | { type: "edge.upserted"; edge: { id: string; sourceId: string; targetId: string } }
-  | { type: "edge.removed"; edgeId: string };
+export const clientToServerMessageSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("hello"),
+      clientId: z.string().min(1),
+      name: z.string().min(1),
+      color: z.string().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("presence"),
+      selectedId: z.string().nullable().optional(),
+      cursor: pointSchema.nullable().optional(),
+    })
+    .strict(),
+  z.object({ type: z.literal("ping") }).strict(),
+]);
+export type ClientToServerMessage = z.infer<typeof clientToServerMessageSchema>;
 
-export type ClientToServerMessage =
-  | { type: "hello"; clientId: string; name: string; color?: string }
-  | {
-      type: "presence";
-      selectedId?: string | null;
-      cursor?: { x: number; y: number } | null;
-    }
-  | { type: "ping" };
+export const serverToClientMessageSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("ready"),
+    workspaceId: z.string(),
+    projectId: z.string(),
+    seq: z.number(),
+    snapshot: boardSnapshotSchema,
+    peers: z.array(syncPeerSchema),
+    you: syncPeerSchema,
+  }),
+  z.object({
+    type: z.literal("event"),
+    workspaceId: z.string(),
+    projectId: z.string(),
+    seq: z.number(),
+    originClientId: z.string().nullable(),
+    event: syncEventSchema,
+  }),
+  z.object({
+    type: z.literal("presence"),
+    workspaceId: z.string(),
+    projectId: z.string(),
+    peers: z.array(syncPeerSchema),
+  }),
+  z.object({ type: z.literal("pong") }),
+  z.object({ type: z.literal("error"), message: z.string() }),
+]);
+export type ServerToClientMessage = z.infer<typeof serverToClientMessageSchema>;
 
-export type ServerToClientMessage =
-  | {
-      type: "ready";
-      projectId: string;
-      seq: number;
-      snapshot: BoardSnapshot;
-      peers: SyncPeer[];
-      you: SyncPeer;
-    }
-  | {
-      type: "event";
-      projectId: string;
-      seq: number;
-      originClientId: string | null;
-      event: SyncEvent;
-    }
-  | { type: "presence"; projectId: string; peers: SyncPeer[] }
-  | { type: "pong" }
-  | { type: "error"; message: string };
-
-export const CLIENT_ID_HEADER = "X-Client-Id";
+export const workspaceBoardSchema = boardSnapshotSchema.extend({
+  members: z.array(memberPreviewSchema),
+  agentId: z.string(),
+});
+export type WorkspaceBoard = z.infer<typeof workspaceBoardSchema>;
 
 const PEER_COLORS = [
   "#3d5a40",
@@ -71,7 +103,7 @@ const PEER_COLORS = [
   "#4a3a5c",
 ];
 
-export function colorForClientId(clientId: string): string {
+export function colorForClientId(clientId: string) {
   let hash = 0;
   for (let i = 0; i < clientId.length; i += 1) {
     hash = (hash * 31 + clientId.charCodeAt(i)) >>> 0;
@@ -79,83 +111,19 @@ export function colorForClientId(clientId: string): string {
   return PEER_COLORS[hash % PEER_COLORS.length] ?? PEER_COLORS[0];
 }
 
-export function applySyncEvent(board: BoardState, event: SyncEvent): BoardState {
-  switch (event.type) {
-    case "board.replace":
-      return {
-        ...board,
-        projectId: event.board.project.id,
-        projectName: event.board.project.name,
-        planningStatus: event.board.project.planningStatus,
-        threadId: event.board.project.threadId,
-        nodes: event.board.nodes,
-        edges: event.board.edges,
-      };
-    case "project.updated":
-      return {
-        ...board,
-        projectId: event.project.id,
-        projectName: event.project.name,
-        planningStatus: event.project.planningStatus,
-        threadId: event.project.threadId,
-      };
-    case "node.upserted": {
-      const idx = board.nodes.findIndex((n) => n.id === event.node.id);
-      if (idx === -1) {
-        return { ...board, nodes: [...board.nodes, event.node] };
-      }
-      const nodes = board.nodes.slice();
-      nodes[idx] = event.node;
-      return { ...board, nodes };
-    }
-    case "node.removed":
-      return {
-        ...board,
-        nodes: board.nodes.filter((n) => n.id !== event.nodeId),
-        edges: board.edges.filter(
-          (e) => e.sourceId !== event.nodeId && e.targetId !== event.nodeId,
-        ),
-      };
-    case "edge.upserted": {
-      const idx = board.edges.findIndex((e) => e.id === event.edge.id);
-      if (idx === -1) {
-        const dup = board.edges.some(
-          (e) => e.sourceId === event.edge.sourceId && e.targetId === event.edge.targetId,
-        );
-        if (dup) return board;
-        return { ...board, edges: [...board.edges, event.edge] };
-      }
-      const edges = board.edges.slice();
-      edges[idx] = event.edge;
-      return { ...board, edges };
-    }
-    case "edge.removed":
-      return {
-        ...board,
-        edges: board.edges.filter((e) => e.id !== event.edgeId),
-      };
-    default:
-      return board;
+export function parseClientMessage(raw: string) {
+  try {
+    const result = clientToServerMessageSchema.safeParse(JSON.parse(raw));
+    return result.success ? result.data : null;
+  } catch {
+    return null;
   }
 }
 
-export function snapshotToBoardState(snapshot: BoardSnapshot): BoardState {
-  return {
-    projectId: snapshot.project.id,
-    projectName: snapshot.project.name,
-    planningStatus: snapshot.project.planningStatus,
-    threadId: snapshot.project.threadId,
-    nodes: snapshot.nodes,
-    edges: snapshot.edges,
-    agentStatus: "idle",
-  };
-}
-
-export function parseClientMessage(raw: string): ClientToServerMessage | null {
+export function parseServerMessage(raw: string) {
   try {
-    const data = JSON.parse(raw) as ClientToServerMessage;
-    if (!data || typeof data !== "object" || !("type" in data)) return null;
-    return data;
+    const result = serverToClientMessageSchema.safeParse(JSON.parse(raw));
+    return result.success ? result.data : null;
   } catch {
     return null;
   }

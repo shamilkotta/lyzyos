@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lyzy-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-05",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "vars": {
+    "BETTER_AUTH_URL": "http://localhost:3000",
+    "WEB_ORIGIN": "http://localhost:3000",
+    "AGENT_ID": "123-321",
+  },
+  "services": [
+    {
+      "binding": "AGENT",
+      "service": "lyzy",
+    },
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lyzy",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "../packages/db/migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "lyzy-files",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "WORKSPACE_SYNC",
+        "class_name": "WorkspaceSync",
+        "script_name": "lyzy-api",
+      },
+    ],
+  },
+}

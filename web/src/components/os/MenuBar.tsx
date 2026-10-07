@@ -1,7 +1,12 @@
 "use client";
 
-import { MagnifyingGlass, Bell, CirclesFour, CaretRight } from "@phosphor-icons/react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { MagnifyingGlass, Bell, CirclesFour, CaretRight, SignOut } from "@phosphor-icons/react";
 import { PRODUCT_NAME } from "@/lib/data";
+import { signOut } from "@/lib/auth-client";
+import { routes } from "@/lib/routes";
+import { useCurrentUser } from "@/lib/session";
 import clsx from "clsx";
 
 type Props = {
@@ -10,11 +15,18 @@ type Props = {
   onCommand: () => void;
   onToggleAttention: () => void;
   attentionCount: number;
-  view: "home" | "campaign" | "planning";
+  view: "home" | "campaign" | "workspace";
   onHome: () => void;
-  /** Click project title in breadcrumb to return to project graph */
   onBackToOverview?: () => void;
+  workspaceName?: string;
 };
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
+}
 
 export function MenuBar({
   spaceName,
@@ -25,8 +37,18 @@ export function MenuBar({
   view,
   onHome,
   onBackToOverview,
+  workspaceName,
 }: Props) {
-  const inProject = (view === "campaign" || view === "planning") && Boolean(spaceName);
+  const router = useRouter();
+  const { user } = useCurrentUser();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const inProject = (view === "campaign" || view === "workspace") && Boolean(spaceName);
+
+  async function handleSignOut() {
+    await signOut();
+    router.push(routes.login);
+    router.refresh();
+  }
 
   return (
     <header className="relative z-20 flex h-[var(--menubar-h)] shrink-0 items-center justify-between border-b border-border bg-surface/90 px-3 backdrop-blur-md">
@@ -39,7 +61,7 @@ export function MenuBar({
           <span className="flex h-6 w-6 items-center justify-center rounded-[5px] bg-ink text-white">
             <CirclesFour size={13} weight="bold" />
           </span>
-          <span className="text-[13px] font-medium tracking-[-0.01em] text-ink">
+          <span className="font-brand text-[14px] font-semibold tracking-[-0.03em] text-ink">
             {PRODUCT_NAME}
           </span>
         </button>
@@ -52,11 +74,11 @@ export function MenuBar({
               onClick={onBackToOverview}
               className={clsx(
                 "truncate text-[13px]",
-                departmentName || view === "planning"
+                departmentName || view === "workspace"
                   ? "text-ink-secondary hover:text-ink"
                   : "cursor-default text-ink",
               )}
-              disabled={!departmentName && view !== "planning"}
+              disabled={!departmentName && view !== "workspace"}
             >
               {spaceName}
             </button>
@@ -70,10 +92,10 @@ export function MenuBar({
           </>
         ) : null}
 
-        {view === "planning" ? (
+        {view === "workspace" ? (
           <>
             <CaretRight size={12} className="shrink-0 text-ink-tertiary" />
-            <span className="truncate text-[13px] text-ink">Planning</span>
+            <span className="truncate text-[13px] text-ink">{workspaceName || "Workspace"}</span>
           </>
         ) : null}
       </div>
@@ -105,8 +127,33 @@ export function MenuBar({
           ) : null}
         </button>
 
-        <div className="ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-canvas text-[11px] font-medium text-ink">
-          MK
+        <div className="relative ml-1">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-canvas text-[11px] font-medium text-ink transition-colors hover:bg-surface-soft"
+            aria-label="Account menu"
+          >
+            {user ? initials(user.name) : "··"}
+          </button>
+          {menuOpen ? (
+            <div className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[180px] rounded-[8px] border border-border bg-surface p-1.5 shadow-[var(--shadow-soft)]">
+              {user ? (
+                <div className="border-b border-border px-2.5 py-2">
+                  <p className="truncate text-[12px] font-medium text-ink">{user.name}</p>
+                  <p className="truncate text-[11px] text-ink-tertiary">{user.email}</p>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="mt-1 flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left text-[12px] text-ink-secondary transition-colors hover:bg-surface-soft hover:text-ink"
+              >
+                <SignOut size={14} weight="bold" />
+                Sign out
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </header>

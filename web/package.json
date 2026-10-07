@@ -5,25 +5,37 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "types": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "start": "next start",
     "lint": "oxlint ."
   },
   "dependencies": {
     "@lyzyos/auth": "workspace:*",
+    "@lyzyos/db": "workspace:*",
+    "@lyzyos/utils": "workspace:*",
+    "@opennextjs/cloudflare": "^1.20.8",
     "@phosphor-icons/react": "^2.1.10",
+    "@tanstack/react-query": "^5.104.1",
     "@xyflow/react": "^12.12.0",
-    "agents": "0.26.0",
+    "better-auth": "^1.7.7",
     "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.3",
     "next": "16.3.8",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261004.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.147.0"
   }
 }

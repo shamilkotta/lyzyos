@@ -6,8 +6,6 @@ import type { Member } from "@/lib/types";
 type Props = {
   members: Member[];
   onSelect?: (member: Member) => void;
-  /** @deprecated Unused — kept for call-site compat. */
-  label?: string;
 };
 
 export function TeamPresence({ members, onSelect }: Props) {
@@ -19,15 +17,19 @@ export function TeamPresence({ members, onSelect }: Props) {
         <button
           key={m.id}
           type="button"
-          title={`${m.name} · ${m.role}${m.kind === "agent" ? " · Agent" : ""}`}
+          title={`${m.name} · ${m.role}`}
           onClick={() => onSelect?.(m)}
           className={clsx(
-            "relative flex h-7 w-7 items-center justify-center rounded-full border border-border/80 bg-surface text-[10px] font-medium text-ink shadow-sm transition-transform hover:z-10 hover:scale-105",
-            m.kind === "agent" && "bg-pale-blue text-pale-blue-ink",
+            "relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-surface text-[10px] font-medium text-ink shadow-sm transition-transform hover:z-10 hover:scale-105",
             i > 0 && "-ml-1.5",
           )}
         >
-          {m.initials}
+          {m.image ? (
+            // oxlint-disable-next-line next/no-img-element
+            <img src={m.image} alt="" className="h-full w-full object-cover" />
+          ) : (
+            m.initials
+          )}
           <span
             className={clsx(
               "absolute bottom-0 right-0 h-1.5 w-1.5 rounded-full ring-2 ring-canvas",
