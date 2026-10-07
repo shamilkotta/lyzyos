@@ -5,29 +5,52 @@ import { generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { BoardState } from "@lyzyos/db";
 import {
-  ensureSchema,
+  appendCommentReply,
+  applyCommentHandoff,
+  buildCommentChat,
+  formatCommentChat,
   getProject,
+  getProjectNode,
+  getProjectWorkspace,
   insertEdge,
   insertPlanningNode,
+  latestCommentMessage,
+  listLinkedNodes,
+  listWorkspaces,
   listDocuments,
-  listPlanningNodes,
   loadBoard,
+  loadPlanningBoard,
   LYZY_USER,
+  rowToNode,
+  markCommentResolved,
   nextNodePosition,
+  serializeCommentMeta,
   touchProject,
   updateProjectName,
+  updatePlanningNode,
   updateProjectThread,
 } from "@lyzyos/db";
+import {
+  publishBoardReplace,
+  publishEdgeUpserted,
+  publishNodeUpserted,
+  publishProjectUpdated,
+} from "./publish";
 
-const SOUL = `You are Lyzy, the planning agent for a marketing operations workspace.
+const SOUL = `You are Lyzy, the project agent for a marketing operations workbench.
 
-You learn from client briefs and documents. Facts that should persist go in the memory block via set_context.
+You are scoped to one project. You may read every workspace in that project and create or update
+workspace nodes when doing requested work. Facts that should persist go in project memory.
 
-The human team sees a planning board stored in the database. When you learn something important, it becomes summary or question nodes they can respond to.
+Only act when initialized or explicitly mentioned in a comment with @Lyzy or @agent. Do not react to
+ordinary board edits. In comment threads, treat messages as a chat: each turn is labeled human or
+agent. Never reply to your own messages; only address the latest human turn that needs you.
+Never make legal approvals or publish campaigns; create recommendations and questions for human
+decisions instead.
 
-On kickoff, call set_project_title with a short campaign name before finishing intake.
+On kickoff, call set_project_title with a short title before finishing intake.
 
-Ask concise clarification questions when the brief is ambiguous. Prefer facts from documents and the brief over assumptions.`;
+Default to asking no questions. Prefer facts from documents and the brief; proceed with reasonable assumptions when possible. Ask only if the situation truly demands a client-only answer to understand the project or unblock next steps — never ask what research or strategy can discover later.`;
 
 export type ThreadSummary = {
   id: string;
@@ -44,6 +67,7 @@ export type ThreadLine = {
 
 const emptyBoard = (): BoardState => ({
   projectId: "",
+  workspace: null,
   projectName: "",
   planningStatus: "in_progress",
   threadId: null,
@@ -97,11 +121,11 @@ export class Lyzy extends Think<Env, BoardState> {
   }
 
   async refreshBoard(input: { projectId: string }): Promise<BoardState> {
-    await ensureSchema(this.env.DB);
-    const board = await loadBoard(this.env.DB, input.projectId);
+    const board = await loadPlanningBoard(this.env.DB, input.projectId);
     if (!board) throw new Error("Project not found.");
     const next: BoardState = {
       projectId: board.project.id,
+      workspace: board.workspace,
       projectName: board.project.name,
       planningStatus: board.project.planningStatus,
       threadId: board.project.threadId,
@@ -115,8 +139,15 @@ export class Lyzy extends Think<Env, BoardState> {
   }
 
   async startKickoff(input: { projectId: string }): Promise<void> {
-    await ensureSchema(this.env.DB);
-    const existing = await listPlanningNodes(this.env.DB, input.projectId);
+    const project = await getProject(this.env.DB, input.projectId);
+    if (!project) {
+      throw new Error(
+        `Project ${input.projectId} not found in agent D1. Local api/agent must share persist-to.`,
+      );
+    }
+    const board = await loadPlanningBoard(this.env.DB, input.projectId);
+    if (!board) throw new Error("Planning workspace not found.");
+    const existing = board.nodes;
     if (existing.some((n) => n.kind === "summary")) {
       await this.refreshBoard({ projectId: input.projectId });
       this.setState({
@@ -129,12 +160,6 @@ export class Lyzy extends Think<Env, BoardState> {
 
     this.setState({ ...this.state, agentStatus: "thinking", agentMessage: "Reading intake…" });
 
-    const project = await getProject(this.env.DB, input.projectId);
-    if (!project) {
-      this.setState({ ...this.state, agentStatus: "error", agentMessage: "Project missing." });
-      return;
-    }
-
     const docs = await listDocuments(this.env.DB, input.projectId);
     for (const doc of docs) {
       const text = doc.textExtract.trim();
@@ -146,7 +171,11 @@ export class Lyzy extends Think<Env, BoardState> {
     const thread = await this.openThread({ title: "Planning" });
     await updateProjectThread(this.env.DB, input.projectId, thread.id);
 
-    const brief = project.brief.trim();
+    const intake = board.nodes
+      .filter((node) => node.kind === "brief")
+      .map((node) => node.body)
+      .join("\n\n");
+    const brief = intake || project.brief.trim();
     if (brief.length > 0) {
       await this.append({ thread: thread.id, role: "user", text: brief });
     }
@@ -166,21 +195,15 @@ export class Lyzy extends Think<Env, BoardState> {
             description:
               "Set the project title shown in the workspace. Call once after reading the brief.",
             inputSchema: z.object({
-              title: z
-                .string()
-                .min(2)
-                .max(80)
-                .describe("Short human-facing campaign name. No markdown. Not 'Untitled project'."),
+              title: z.string().min(1).max(80).describe("Short campaign / project title."),
             }),
             execute: async ({ title }) => {
-              const cleaned = title
-                .trim()
-                .replace(/^#+\s*/, "")
-                .slice(0, 80);
+              const cleaned = title.trim().slice(0, 80);
               if (cleaned.length === 0) {
                 return { ok: false as const, error: "Empty title" };
               }
               await updateProjectName(this.env.DB, input.projectId, cleaned);
+              await publishProjectUpdated(this.env, input.projectId, board.workspace.id);
               return { ok: true as const, title: cleaned };
             },
           }),
@@ -188,10 +211,15 @@ export class Lyzy extends Think<Env, BoardState> {
         stopWhen: stepCountIs(4),
         prompt: `You are a campaign planning agent. Analyze the brief and documents.
 
-1. Call set_project_title with a short campaign name (product + campaign type is fine).
+1. Call set_project_title with a short title (any format is fine).
 2. Then return ONLY valid JSON with keys:
    - "summary" (string, 2-4 sentences)
-   - "questions" (array of up to 4 short strings the client should answer)
+   - "questions" (array of strings — prefer [])
+
+Questions are optional. Default to []. Try to skip them.
+Only include a question when the situation demands it: a blocker you cannot reasonably assume past, and only the client can answer (preferences, constraints, approvals, internal goals, stakeholders, non-public brand rules, etc.).
+Do NOT ask anything research or strategy can figure out later (market, competitors, channels, creative angles, public audience insights, etc.).
+If the brief/docs are enough to move forward, return "questions": [].
 
 Brief:
 ${brief || "(none)"}
@@ -204,16 +232,17 @@ ${docSnippet || "(none)"}`,
       questions = parsed.questions;
     } catch {
       summary = brief
-        ? "Initial read complete. A few details still need confirmation before planning continues."
-        : "Documents received. Add a brief or answer questions so planning can continue.";
+        ? "Initial read complete. Ready to continue planning from the brief and documents."
+        : "Documents received. Add a brief if you want planning shaped around a specific goal.";
       questions = defaultQuestions(brief, docs.length);
     }
 
-    const summaryPos = await nextNodePosition(this.env.DB, input.projectId, 3);
+    const summaryPos = await nextNodePosition(this.env.DB, board.workspace.id, 3);
     const summaryId = crypto.randomUUID();
-    await insertPlanningNode(this.env.DB, {
+    const summaryNode = await insertPlanningNode(this.env.DB, {
       id: summaryId,
       projectId: input.projectId,
+      workspaceId: board.workspace.id,
       kind: "summary",
       title: "What Lyzy understood",
       body: summary,
@@ -222,26 +251,39 @@ ${docSnippet || "(none)"}`,
       x: summaryPos.x,
       y: summaryPos.y,
     });
+    await publishNodeUpserted(this.env, board.workspace.id, summaryNode);
 
     let qIndex = 0;
-    for (const question of questions.slice(0, 4)) {
-      const qPos = await nextNodePosition(this.env.DB, input.projectId, 4);
+    for (const question of questions) {
+      const qPos = await nextNodePosition(this.env.DB, board.workspace.id, 4);
       const qId = crypto.randomUUID();
-      await insertPlanningNode(this.env.DB, {
+      const questionNode = await insertPlanningNode(this.env.DB, {
         id: qId,
         projectId: input.projectId,
+        workspaceId: board.workspace.id,
         kind: "question",
-        title: "Needs your input",
+        title: "",
         body: question,
         authorKind: "agent",
         authorName: LYZY_USER.name,
         status: "open",
+        meta: serializeCommentMeta({
+          replies: [],
+          openAudience: { kind: "everyone" },
+        }),
         x: qPos.x,
         y: qPos.y + qIndex * 24,
       });
+      await publishNodeUpserted(this.env, board.workspace.id, questionNode);
+      const edgeId = crypto.randomUUID();
       await insertEdge(this.env.DB, {
-        id: crypto.randomUUID(),
-        projectId: input.projectId,
+        id: edgeId,
+        workspaceId: board.workspace.id,
+        sourceId: summaryId,
+        targetId: qId,
+      });
+      await publishEdgeUpserted(this.env, board.workspace.id, {
+        id: edgeId,
         sourceId: summaryId,
         targetId: qId,
       });
@@ -250,6 +292,7 @@ ${docSnippet || "(none)"}`,
 
     await touchProject(this.env.DB, input.projectId);
     await this.refreshBoard({ projectId: input.projectId });
+    await publishBoardReplace(this.env, board.workspace.id);
     this.setState({
       ...this.state,
       agentStatus: "ready",
@@ -270,10 +313,13 @@ ${docSnippet || "(none)"}`,
         prompt: `The client answered: "${input.userMessage}"
 Write one short paragraph summarizing what this answer implies for the campaign plan.`,
       });
-      const pos = await nextNodePosition(this.env.DB, input.projectId, 3);
-      await insertPlanningNode(this.env.DB, {
+      const board = await loadPlanningBoard(this.env.DB, input.projectId);
+      if (!board) return;
+      const pos = await nextNodePosition(this.env.DB, board.workspace.id, 3);
+      const note = await insertPlanningNode(this.env.DB, {
         id: crypto.randomUUID(),
         projectId: input.projectId,
+        workspaceId: board.workspace.id,
         kind: "summary",
         title: "Lyzy noted",
         body: result.text.trim(),
@@ -282,6 +328,7 @@ Write one short paragraph summarizing what this answer implies for the campaign 
         x: pos.x,
         y: pos.y,
       });
+      await publishNodeUpserted(this.env, board.workspace.id, note);
     } catch {
       /* board already has the human answer */
     }
@@ -289,6 +336,264 @@ Write one short paragraph summarizing what this answer implies for the campaign 
     await touchProject(this.env.DB, input.projectId);
     await this.refreshBoard({ projectId: input.projectId });
     this.setState({ ...this.state, agentStatus: "ready", agentMessage: "Updated" });
+  }
+
+  async invokeFromNode(input: {
+    projectId: string;
+    workspaceId: string;
+    nodeId: string;
+  }): Promise<void> {
+    const source = await getProjectNode(this.env.DB, input.projectId, input.nodeId);
+    const workspace = await getProjectWorkspace(this.env.DB, input.projectId, input.workspaceId);
+    if (!source || !workspace || source.workspaceId !== workspace.id) {
+      throw new Error("Mention source not found.");
+    }
+    const sourceDto = rowToNode(source);
+
+    this.setState({ ...this.state, agentStatus: "thinking", agentMessage: "Working on mention…" });
+
+    const linked = await listLinkedNodes(this.env.DB, source.workspaceId, source.id);
+    const linkedRefs = linked.map((node) => {
+      const dto = rowToNode(node);
+      return {
+        id: dto.id,
+        kind: dto.kind,
+        title: dto.title,
+        preview: dto.body.slice(0, 240),
+      };
+    });
+    const chat = buildCommentChat({
+      body: sourceDto.body,
+      meta: sourceDto.meta,
+      authorKind: sourceDto.authorKind,
+      authorName: sourceDto.authorName,
+    });
+    const latest = latestCommentMessage(chat);
+
+    // Nothing to do if the thread is empty or we already spoke last (avoids self-replies).
+    if (!latest || latest.authorKind === "agent") {
+      this.setState({
+        ...this.state,
+        agentStatus: "ready",
+        agentMessage: latest ? "Already replied" : "Nothing to answer",
+      });
+      return;
+    }
+
+    const workspaceTools = {
+      list_workspaces: tool({
+        description: "List the workspaces available in this project.",
+        inputSchema: z.object({}),
+        execute: async () => ({
+          workspaces: (await listWorkspaces(this.env.DB, input.projectId)).map((item) => ({
+            id: item.id,
+            slug: item.slug,
+            name: item.name,
+            kind: item.kind,
+          })),
+        }),
+      }),
+      read_workspace_nodes: tool({
+        description: "Read all nodes in a project workspace by id or slug.",
+        inputSchema: z.object({ workspace: z.string().min(1) }),
+        execute: async ({ workspace: selector }) => {
+          const target = await getProjectWorkspace(this.env.DB, input.projectId, selector);
+          if (!target) return { error: "Workspace not found" };
+          const board = await loadBoard(this.env.DB, target.id);
+          return { nodes: board?.nodes ?? [] };
+        },
+      }),
+      read_linked_nodes: tool({
+        description:
+          "Read nodes connected by edges to the current comment. Use when the prompt lists linked references.",
+        inputSchema: z.object({}),
+        execute: async () => {
+          const nodes = await listLinkedNodes(this.env.DB, source.workspaceId, source.id);
+          return {
+            nodes: nodes.map((node) => {
+              const dto = rowToNode(node);
+              return {
+                id: dto.id,
+                kind: dto.kind,
+                title: dto.title,
+                body: dto.body,
+                authorKind: dto.authorKind,
+                authorName: dto.authorName,
+                status: dto.status,
+              };
+            }),
+          };
+        },
+      }),
+      read_node: tool({
+        description: "Read one project node by id for full context.",
+        inputSchema: z.object({ nodeId: z.string().min(1) }),
+        execute: async ({ nodeId }) => {
+          const node = await getProjectNode(this.env.DB, input.projectId, nodeId);
+          if (!node) return { error: "Node not found" };
+          return { node };
+        },
+      }),
+      create_workspace_node: tool({
+        description:
+          "Add a note, summary, or question to a project workspace. Use questions for human decisions.",
+        inputSchema: z.object({
+          workspace: z.string().min(1),
+          kind: z.enum(["note", "summary", "question"]),
+          title: z.string().max(120).optional(),
+          body: z.string().min(1).max(20_000),
+        }),
+        execute: async ({ workspace: selector, kind, title, body }) => {
+          const target = await getProjectWorkspace(this.env.DB, input.projectId, selector);
+          if (!target) return { error: "Workspace not found" };
+          const pos = await nextNodePosition(this.env.DB, target.id, 3);
+          const node = await insertPlanningNode(this.env.DB, {
+            id: crypto.randomUUID(),
+            projectId: input.projectId,
+            workspaceId: target.id,
+            kind,
+            title: kind === "question" ? "" : title?.trim() || "Note",
+            body,
+            authorKind: "agent",
+            authorName: LYZY_USER.name,
+            status: kind === "question" ? "open" : undefined,
+            meta:
+              kind === "question"
+                ? serializeCommentMeta({
+                    replies: [],
+                    openAudience: { kind: "everyone" },
+                  })
+                : undefined,
+            x: pos.x,
+            y: pos.y,
+          });
+          await publishNodeUpserted(this.env, target.id, node);
+          return { node };
+        },
+      }),
+      update_workspace_node: tool({
+        description:
+          "Update the title or body of a project node. For comment threads, status may only be set to resolved.",
+        inputSchema: z.object({
+          nodeId: z.string().min(1),
+          title: z.string().max(120).optional(),
+          body: z.string().max(20_000).optional(),
+          status: z.enum(["resolved"]).optional(),
+        }),
+        execute: async ({ nodeId, title, body, status }) => {
+          const node = await getProjectNode(this.env.DB, input.projectId, nodeId);
+          if (!node) return { error: "Node not found" };
+          const dto = rowToNode(node);
+          if (status === "resolved" && node.kind !== "comment") {
+            return { error: "Only comment threads can be resolved." };
+          }
+          await updatePlanningNode(this.env.DB, nodeId, {
+            title,
+            body,
+            ...(status === "resolved"
+              ? { status: "resolved" as const, meta: markCommentResolved(dto.meta) }
+              : {}),
+          });
+          const updated = await getProjectNode(this.env.DB, input.projectId, nodeId);
+          if (updated) await publishNodeUpserted(this.env, updated.workspaceId, updated);
+          return { ok: true };
+        },
+      }),
+      read_memory: tool({
+        description: "Read durable memory for this project agent.",
+        inputSchema: z.object({}),
+        execute: async () => ({ memory: this.context.getBlock("memory")?.content ?? "" }),
+      }),
+      remember: tool({
+        description: "Store a durable project fact for future agent calls.",
+        inputSchema: z.object({ fact: z.string().min(1).max(2_000) }),
+        execute: async ({ fact }) => this.learn(fact),
+      }),
+      replace_memory: tool({
+        description: "Replace project memory after correcting or consolidating facts.",
+        inputSchema: z.object({ memory: z.string().max(12_000) }),
+        execute: async ({ memory }) => this.replaceMemory(memory),
+      }),
+    };
+
+    try {
+      const result = await generateText({
+        model: this.resolveModel(),
+        tools: workspaceTools,
+        stopWhen: stepCountIs(10),
+        prompt: `You are Lyzy in a comment chat on the ${workspace.name} workspace.
+
+Chat transcript (oldest → newest). Each turn shows who wrote it:
+${formatCommentChat(chat)}
+
+Latest message:
+- Author: ${latest.authorName} (${latest.authorKind})
+- Text: ${latest.body}
+
+Rules:
+- Messages labeled "(agent / you)" are your prior replies — do not answer them or continue them as if they were questions to you.
+- Only respond to the latest human message above.
+- If that human message does not need a reply (e.g. acknowledgment only and no ask), output an empty string.
+- Reply concisely; your text is appended to this same comment thread as Lyzy.
+- To ask everyone for a reply, include a clear question mark in your message.
+- To ask one person, @mention them by first name (mention wins over a broadcast question).
+- When the thread is done, call update_workspace_node with status "resolved" on this comment.
+
+Linked node references (call read_linked_nodes or read_node for full content when needed):
+${
+  linkedRefs.length === 0
+    ? "(none)"
+    : linkedRefs
+        .map(
+          (node) => `- ${node.id} [${node.kind}] ${node.title || "(untitled)"} :: ${node.preview}`,
+        )
+        .join("\n")
+}
+
+Use project memory and workspace tools as needed. Prefer read_linked_nodes when the request depends on connected context.`,
+      });
+
+      const replyBody = result.text.trim();
+      if (replyBody.length === 0) {
+        this.setState({
+          ...this.state,
+          agentStatus: "ready",
+          agentMessage: "No reply needed",
+        });
+        return;
+      }
+
+      const current = await getProjectNode(this.env.DB, input.projectId, source.id);
+      if (!current) throw new Error("Comment disappeared during invoke.");
+      const currentDto = rowToNode(current);
+      const { meta: withReply } = appendCommentReply(currentDto.meta, {
+        authorKind: "agent",
+        authorName: LYZY_USER.name,
+        body: replyBody,
+      });
+      const handoff = applyCommentHandoff({
+        meta: withReply,
+        currentStatus: current.status,
+        authorKind: "agent",
+        body: replyBody,
+      });
+      await updatePlanningNode(this.env.DB, source.id, {
+        meta: handoff.meta,
+        status: handoff.status,
+      });
+      const replied = await getProjectNode(this.env.DB, input.projectId, source.id);
+      if (replied) await publishNodeUpserted(this.env, replied.workspaceId, replied);
+      await touchProject(this.env.DB, input.projectId);
+      await this.refreshBoard({ projectId: input.projectId });
+      this.setState({ ...this.state, agentStatus: "ready", agentMessage: "Mention completed" });
+    } catch (error) {
+      this.setState({
+        ...this.state,
+        agentStatus: "error",
+        agentMessage: error instanceof Error ? error.message : "Mention failed",
+      });
+      throw error;
+    }
   }
 
   async ingestDocument(input: { projectId: string; name: string; text: string }): Promise<void> {
@@ -410,6 +715,12 @@ Write one short paragraph summarizing what this answer implies for the campaign 
     return { memory: block.content };
   }
 
+  async replaceMemory(memory: string): Promise<{ memory: string }> {
+    const block = await this.context.setBlock("memory", memory.trim());
+    await this.context.refreshSystemPrompt();
+    return { memory: block.content };
+  }
+
   async known(): Promise<{ memory: string; catalog: string; library: string }> {
     return {
       memory: this.context.getBlock("memory")?.content ?? "",
@@ -492,10 +803,9 @@ function parseAnalysis(text: string): { summary: string; questions: string[] } {
 }
 
 function defaultQuestions(brief: string, docCount: number): string[] {
-  const qs: string[] = [];
-  if (brief.length < 40) qs.push("What is the primary business objective for this campaign?");
-  if (docCount === 0) qs.push("Can you share brand guidelines or approved product claims?");
-  qs.push("Who is the target audience and which markets should we prioritize?");
-  qs.push("What is the target launch date and success metrics?");
-  return qs.slice(0, 4);
+  // Fallback path only — keep empty unless intake is clearly unusable.
+  if (brief.length < 40 && docCount === 0) {
+    return ["What should this campaign achieve, and any hard constraints we must respect?"];
+  }
+  return [];
 }

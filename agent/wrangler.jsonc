@@ -19,6 +19,7 @@
       "binding": "DB",
       "database_name": "lyzy",
       "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "../packages/db/migrations",
     },
   ],
   "r2_buckets": [
@@ -28,7 +29,14 @@
     },
   ],
   "durable_objects": {
-    "bindings": [{ "name": "AGENT", "class_name": "Lyzy" }],
+    "bindings": [
+      { "name": "AGENT", "class_name": "Lyzy" },
+      {
+        "name": "WORKSPACE_SYNC",
+        "class_name": "WorkspaceSync",
+        "script_name": "lyzy-api",
+      },
+    ],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Lyzy"] }],
 }
