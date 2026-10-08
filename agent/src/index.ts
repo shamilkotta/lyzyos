@@ -9,6 +9,10 @@ export { CodemodeRuntime } from "@cloudflare/codemode";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    if (request.headers.get("X-Internal-Secret") !== env.INTERNAL_SECRET) {
+      return new Response("Not found", { status: 404 });
+    }
+
     const trigger = await handleAgentTrigger(request, env, ctx);
     if (trigger) return trigger;
 
@@ -24,10 +28,6 @@ async function handleAgentTrigger(request: Request, env: Env, ctx: ExecutionCont
 
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
-  }
-
-  if (request.headers.get("X-Internal-Secret") !== env.INTERNAL_SECRET) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const [body, error] = await tryCatch(request.json());
