@@ -9,7 +9,7 @@ import type { Lyzy } from "./agent";
 import { publishNodeUpserted } from "./publish";
 import type { ChatBody } from "./schema";
 import { COMPACT_AFTER_TOKENS, SKIP_MARKER } from "./system";
-import { toolsContextFor, type ToolSession } from "./tools";
+import { createTools, toolsContextFor, type ToolSession } from "./tools";
 
 type StepContentPart =
   | { type: "text"; text: string }
@@ -148,8 +148,9 @@ async function runThreadTurn(
   const history = (await thread.getHistory()) as UIMessage[];
   const system = await buildSystemPrompt.call(this);
   const agentTools = this.getTools();
+  const projectTools = createTools.call(this);
   const contextTools = await this.context.tools();
-  const tools = { ...contextTools, ...agentTools };
+  const tools = { ...contextTools, ...agentTools, ...projectTools };
 
   try {
     return await generateText({
@@ -157,7 +158,7 @@ async function runThreadTurn(
       instructions: system,
       messages: await convertToModelMessages(history),
       tools: tools,
-      toolsContext: toolsContextFor(session, agentTools),
+      toolsContext: toolsContextFor(session, projectTools),
       stopWhen: stepCountIs(this.maxSteps),
     });
   } catch (error) {

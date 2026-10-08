@@ -21,6 +21,14 @@
     "binding": "AI",
     "remote": true,
   },
+  "browser": {
+    "binding": "BROWSER",
+  },
+  "worker_loaders": [
+    {
+      "binding": "LOADER",
+    },
+  ],
   "d1_databases": [
     {
       "binding": "DB",

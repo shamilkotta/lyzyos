@@ -1,17 +1,20 @@
-import { routeAgentRequest } from "agents";
+// import { routeAgentRequest } from "agents";
 import { tryCatch } from "@lyzyos/utils";
 import { z } from "zod";
 import { Lyzy } from "./agent";
 import { chatBodySchema } from "./schema";
 
 export { Lyzy };
+export { CodemodeRuntime } from "@cloudflare/codemode";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const trigger = await handleAgentTrigger(request, env, ctx);
     if (trigger) return trigger;
 
-    return (await routeAgentRequest(request, env)) || new Response("Not found", { status: 404 });
+    return new Response("Not found", { status: 404 });
+
+    // return (await routeAgentRequest(request, env)) || new Response("Not found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;
 
