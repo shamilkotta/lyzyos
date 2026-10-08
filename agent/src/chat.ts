@@ -156,8 +156,8 @@ async function runThreadTurn(
     return await generateText({
       model: this.resolveModel(),
       instructions: system,
-      messages: await convertToModelMessages(history),
-      tools: tools,
+      messages: await convertToModelMessages(history, { tools }),
+      tools,
       toolsContext: toolsContextFor(session, projectTools),
       stopWhen: stepCountIs(this.maxSteps),
     });
