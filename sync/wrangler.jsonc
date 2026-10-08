@@ -24,7 +24,7 @@
     {
       "binding": "DB",
       "database_name": "lyzy",
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_id": "5bd99c72-6251-43d3-bf51-38d1c93f86c9",
       "migrations_dir": "../packages/db/migrations",
     },
   ],
