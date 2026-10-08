@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
-const AUTH_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password"];
+const AUTH_PATHS = ["/login", "/forgot-password", "/reset-password"];
 const PUBLIC_API_PATHS = ["/api/auth", "/api/health"];
 
 function isAuthPath(pathname: string) {

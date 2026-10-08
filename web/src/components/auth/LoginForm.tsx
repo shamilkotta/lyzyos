@@ -78,12 +78,6 @@ export function LoginForm() {
       <Button type="submit" className="w-full py-2" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>
-      <p className="text-center text-[12px] text-ink-secondary">
-        No account?{" "}
-        <Link href={routes.signup} className="font-medium text-ink hover:underline">
-          Create one
-        </Link>
-      </p>
     </form>
   );
 }

@@ -42,7 +42,14 @@ async function parseJson(response: Response) {
     let message = text || response.statusText;
     try {
       const body: unknown = JSON.parse(text);
-      if (typeof body?.error === "string") message = body?.error;
+      if (
+        typeof body === "object" &&
+        body !== null &&
+        "error" in body &&
+        typeof body.error === "string"
+      ) {
+        message = body.error;
+      }
     } catch {
       // keep raw text
     }
@@ -54,7 +61,14 @@ async function parseJson(response: Response) {
 }
 
 function unwrapData(payload: unknown) {
-  if (typeof payload?.data === "object") return payload.data;
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "data" in payload &&
+    typeof payload.data === "object"
+  ) {
+    return payload.data;
+  }
   return payload;
 }
 
