@@ -6,6 +6,9 @@ export const DEFAULT_WORKSPACES = {
   },
 } as const;
 
-export function resolveAuthorKind({ id, agentId }: { id?: string; agentId: string }) {
-  return id === agentId ? "agent" : "human";
+/** Role given to agent accounts (Better Auth user.role). Humans get "user"/"admin"/null. */
+export const AGENT_ROLE = "agent";
+
+export function resolveAuthorKind(role?: string | null) {
+  return role === AGENT_ROLE ? "agent" : "human";
 }

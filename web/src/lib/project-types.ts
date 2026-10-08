@@ -6,6 +6,7 @@ import {
   type CommentNodeDto,
   type DocNodeDto,
   type DocPreviewKind,
+  type MemberPreview,
   type NodeAuthor,
   type NodeDto,
   type NoteNodeDto,
@@ -21,7 +22,8 @@ export type BoardNodeKind = NodeDto["kind"];
 export type ProjectStatus = ProjectDto["status"];
 export type Project = ProjectDto;
 export type Workspace = WorkspaceDto & { project?: Project };
-export type ApiAuthor = NodeAuthor;
+export type ApiAuthor = MemberPreview;
+export type { NodeAuthor };
 export type ApiProjectListItem = Project;
 export type ApiProjectDetail = Project & { workspaces: Workspace[] };
 export type ApiWorkspaceListItem = Workspace & { project: Project };
@@ -37,7 +39,6 @@ export type BoardState = {
   nodes: BoardNode[];
   edges: BoardEdge[];
   members: ApiAuthor[];
-  agentId: string;
   agentStatus: AgentStatus;
   agentMessage?: string;
 };
@@ -56,6 +57,7 @@ function dedupeAuthors(authors: ApiAuthor[]) {
       id: author.id,
       name: author.name,
       image: author.image ?? null,
+      kind: author.kind,
     });
   }
   return [...byId.values()];
@@ -64,7 +66,6 @@ function dedupeAuthors(authors: ApiAuthor[]) {
 export function toBoardState(
   board: Pick<WorkspaceBoard, "project" | "workspace" | "nodes" | "edges"> & {
     members?: ApiAuthor[];
-    agentId?: string;
   },
   prev?: BoardState | null,
 ) {
@@ -79,7 +80,6 @@ export function toBoardState(
     nodes: board.nodes,
     edges: board.edges,
     members: dedupeAuthors(board.members ?? prev?.members ?? []),
-    agentId: board.agentId ?? prev?.agentId ?? "",
     agentStatus: prev?.agentStatus ?? "idle",
     agentMessage: prev?.agentMessage,
   } satisfies BoardState;

@@ -1,27 +1,40 @@
 import {
   addCommentToThread,
+  addMemberToWorkspace,
   createCommentNode,
   createNoteNode,
+  createWorkspace,
   getNodeDto,
   getNodeInProject,
   getProjectWorkspace,
   getWorkspaceMembers,
   insertEdge,
+  listUsers,
   listWorkspaceEdges,
   listWorkspaceNodes,
   listWorkspaces,
   updateNode,
+  updateProjectName,
+  updateReplyComment,
+  updateWorkspaceStatus,
+  workspaceStatus,
   type NodeDto,
 } from "@lyzyos/db";
 import { tryCatch } from "@lyzyos/utils";
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type { Lyzy } from "./agent";
-import { publishEdgeUpserted, publishNodeUpserted } from "./publish";
+import {
+  publishEdgeUpserted,
+  publishNodeUpserted,
+  publishProjectUpdated,
+  publishWorkspaceUpdated,
+} from "./publish";
 
 export const toolSessionSchema = z.object({
   projectId: z.string().min(1),
   workspaceId: z.string().min(1),
+  threadId: z.string().min(1),
 });
 
 const nonEmptyString = z.string().trim().nonempty();
@@ -47,6 +60,21 @@ export function createTools(this: Lyzy) {
   async function resolveNode(context: ToolSession, nodeId: string) {
     return getNodeInProject(env.DB, { nodeId, projectId: context.projectId });
   }
+
+  /**
+   * Serializes publish calls so events reach WebSocket clients one at a time even
+   * when the AI SDK executes multiple tool calls in parallel within a single step.
+   * Without this, all tools in a step fire publishNodeUpserted concurrently and the
+   * client sees every change land at once instead of incrementally.
+   */
+  // let publishTail = Promise.resolve();
+  // function enqueuePublish(fn: () => Promise<void>) {
+  //   publishTail = publishTail.then(fn, fn);
+  //   return publishTail;
+  // }
+
+  // Tracks the reply created by set_status so subsequent calls update in place.
+  let statusReplyId: string | null = null;
 
   return {
     all_project_workspaces: tool({
@@ -77,7 +105,7 @@ export function createTools(this: Lyzy) {
       execute: async (input, { context }) => {
         const workspace = await resolveWorkspace(context, input.workspaceId);
         if (!workspace) return { ok: false, error: "Workspace not found" };
-        const nodes = await listWorkspaceNodes(env.DB, workspace.id, env.AGENT_ID);
+        const nodes = await listWorkspaceNodes(env.DB, workspace.id);
         return { ok: true, workspaceId: workspace.id, nodes: nodes.map(toToolNode) };
       },
     }),
@@ -97,135 +125,103 @@ export function createTools(this: Lyzy) {
       },
     }),
     add_node: tool({
-      description: `Add a node in the workspace. either note node or comment node. use it depending on what you want to add
-          use comment for start new interaction / ask question / chat with team members.
-          use note share your findings, note down something that will be helpful other team members ...etc`,
-      inputSchema: z
-        .array(
-          z.object({
-            title: optionalString.describe("Short title for a note node, (optional)"),
-            data: nonEmptyString.describe(
-              "Note / message / question of what ever content you want to add in the node",
-            ),
-            x: z
-              .number()
-              .optional()
-              .describe("X position of node on the workspace canvas, (optional)"),
-            y: z
-              .number()
-              .optional()
-              .describe("Y position of node on the workspace canvas, (optional)"),
-            workspaceId: optionalString.describe(
-              "Workspace id where you want to add node. Optional, if omitted node will add on the same workspace where this context / interaction is started",
-            ),
-            kind: z
-              .enum(["note", "comment"])
-              .describe("Node type you want to add, comment or note"),
-          }),
-        )
-        .nonempty(),
+      description: `Add one node to a workspace canvas: a note or a comment thread. Call it once per node.
+          Use comment to start a new interaction / ask a question / chat with team members.
+          Use note to share findings or write down something helpful for other team members.
+          Returns the created node, including its nodeId (use it with add_edge or reply_comment).`,
+      inputSchema: z.object({
+        kind: z.enum(["note", "comment"]).describe("Node type you want to add, comment or note"),
+        title: optionalString.describe(
+          "Short title for a note node, (optional, ignored for comments)",
+        ),
+        data: nonEmptyString.describe(
+          "Note content, or the opening message of a comment thread. Markdown is supported",
+        ),
+        x: z.number().optional().describe("X position of node on the workspace canvas, (optional)"),
+        y: z.number().optional().describe("Y position of node on the workspace canvas, (optional)"),
+        workspaceId: optionalString.describe(
+          "Workspace id where you want to add node. Optional, if omitted node will add on the same workspace where this context / interaction is started",
+        ),
+      }),
       contextSchema: toolSessionSchema,
       execute: async (input, { context }) => {
-        const results = [];
-        // Auto-placed nodes go in a fresh column right of everything already on each canvas.
-        const autoSlots = new Map<string, { x: number; row: number }>();
+        const workspace = await resolveWorkspace(context, input.workspaceId);
+        if (!workspace) return { ok: false, error: "Workspace not found" };
 
-        for (const item of input) {
-          const workspace = await resolveWorkspace(context, item.workspaceId);
-          if (!workspace) {
-            results.push({ ok: false, error: "Workspace not found" });
-            continue;
-          }
-
-          let { x, y } = item;
-          if (x === undefined || y === undefined) {
-            let slot = autoSlots.get(workspace.id);
-            if (!slot) {
-              const existing = await listWorkspaceNodes(env.DB, workspace.id, env.AGENT_ID);
-              const maxX = existing.reduce((max, n) => Math.max(max, n.x), -NODE_COLUMN_WIDTH);
-              slot = { x: maxX + NODE_COLUMN_WIDTH, row: 0 };
-              autoSlots.set(workspace.id, slot);
-            }
-            x ??= slot.x;
-            y ??= 40 + slot.row * NODE_ROW_HEIGHT;
-            slot.row += 1;
-          }
-
-          const nodeId = crypto.randomUUID();
-          const base = {
-            id: nodeId,
-            workspaceId: workspace.id,
-            authorId: env.AGENT_ID,
-            x,
-            y,
-          };
-          if (item.kind === "note") {
-            await createNoteNode(env.DB, { ...base, title: item.title ?? "", data: item.data });
-          } else {
-            await createCommentNode(env.DB, { ...base, title: "", data: item.data });
-          }
-
-          const node = await getNodeDto(env.DB, nodeId, env.AGENT_ID);
-          if (!node) {
-            results.push({ ok: false, error: "Failed to create node" });
-            continue;
-          }
-          await publishNodeUpserted(env, workspace.id, node);
-          results.push({ ok: true, node: toToolNode(node) });
+        let { x, y } = input;
+        if (x === undefined || y === undefined) {
+          // Auto-place below the right-most column so new nodes never overlap existing ones.
+          const existing = await listWorkspaceNodes(env.DB, workspace.id);
+          const maxX = existing.reduce((max, n) => Math.max(max, n.x), 40 - NODE_COLUMN_WIDTH);
+          const column = existing.filter((n) => n.x === maxX);
+          const maxY = column.reduce((max, n) => Math.max(max, n.y), 40 - NODE_ROW_HEIGHT);
+          x ??= existing.length === 0 ? 40 : maxX;
+          y ??= existing.length === 0 ? 40 : maxY + NODE_ROW_HEIGHT;
         }
 
-        return results;
+        const nodeId = crypto.randomUUID();
+        const base = { id: nodeId, workspaceId: workspace.id, authorId: env.AGENT_ID, x, y };
+        if (input.kind === "note") {
+          await createNoteNode(env.DB, { ...base, title: input.title ?? "", data: input.data });
+        } else {
+          await createCommentNode(env.DB, { ...base, title: "", data: input.data });
+        }
+
+        const node = await getNodeDto(env.DB, nodeId);
+        if (!node) return { ok: false, error: "Failed to create node" };
+        await publishNodeUpserted(env, workspace.id, node);
+        return { ok: true, node: toToolNode(node) };
       },
     }),
     add_edge: tool({
-      description: `Add edges between source and target nodes. connect related data / nodes. Both nodes must be in the same workspace`,
-      inputSchema: z
-        .array(
-          z.object({
-            sourceNodeId: nonEmptyString.describe("Source node id where edge stat from"),
-            targetNodeId: nonEmptyString.describe("Target node id where edge ends"),
-          }),
-        )
-        .nonempty(),
+      description: `Connect two related nodes with an edge. Call it once per edge. Both nodes must be in the same workspace`,
+      inputSchema: z.object({
+        sourceNodeId: nonEmptyString.describe("Source node id where the edge starts"),
+        targetNodeId: nonEmptyString.describe("Target node id where the edge ends"),
+      }),
       contextSchema: toolSessionSchema,
       execute: async (input, { context }) => {
-        const results = [];
-        for (const item of input) {
-          if (item.sourceNodeId === item.targetNodeId) {
-            results.push({ ok: false, error: "Cannot connect a node to itself" });
-            continue;
-          }
-          const [source, target] = await Promise.all([
-            resolveNode(context, item.sourceNodeId),
-            resolveNode(context, item.targetNodeId),
-          ]);
-          if (!source || !target) {
-            results.push({ ok: false, error: "Node not found" });
-            continue;
-          }
-          if (source.workspaceId !== target.workspaceId) {
-            results.push({ ok: false, error: "Nodes are in different workspaces" });
-            continue;
-          }
-
-          const [rows, error] = await tryCatch(
-            insertEdge(env.DB, {
-              workspaceId: source.workspaceId,
-              sourceId: source.id,
-              targetId: target.id,
-            }),
-          );
-          const edge = rows?.[0];
-          if (error || !edge) {
-            results.push({ ok: false, error: "Edge already exists" });
-            continue;
-          }
-
-          const dto = { id: edge.id, sourceId: edge.sourceId, targetId: edge.targetId };
-          await publishEdgeUpserted(env, edge.workspaceId, dto);
-          results.push({ ok: true, edge: dto });
+        if (input.sourceNodeId === input.targetNodeId) {
+          return { ok: false, error: "Cannot connect a node to itself" };
         }
-        return results;
+        const [source, target] = await Promise.all([
+          resolveNode(context, input.sourceNodeId),
+          resolveNode(context, input.targetNodeId),
+        ]);
+        if (!source || !target) return { ok: false, error: "Node not found" };
+        if (source.workspaceId !== target.workspaceId) {
+          return { ok: false, error: "Nodes are in different workspaces" };
+        }
+
+        const [rows, error] = await tryCatch(
+          insertEdge(env.DB, {
+            workspaceId: source.workspaceId,
+            sourceId: source.id,
+            targetId: target.id,
+          }),
+        );
+        const edge = rows?.[0];
+        if (error || !edge) return { ok: false, error: "Edge already exists" };
+
+        const dto = { id: edge.id, sourceId: edge.sourceId, targetId: edge.targetId };
+        await publishEdgeUpserted(env, edge.workspaceId, dto);
+        return { ok: true, edge: dto };
+      },
+    }),
+    update_project_title: tool({
+      description: `Rename the project. NOT allowed unless a team member explicitly asks you to set or change the project title
+          (the project kickoff counts as such a request). Never call it on your own initiative.`,
+      inputSchema: z.object({
+        title: nonEmptyString
+          .max(80)
+          .describe("New project title, short and specific (max 80 characters)"),
+      }),
+      contextSchema: toolSessionSchema,
+      execute: async (input, { context }) => {
+        const project = await updateProjectName(env.DB, context.projectId, input.title);
+        if (!project) return { ok: false, error: "Project not found" };
+        await publishProjectUpdated(env, project);
+        return { ok: true, title: project.name };
       },
     }),
     update_node: tool({
@@ -248,7 +244,7 @@ export function createTools(this: Lyzy) {
           return { ok: false, error: "Node not found" };
         }
 
-        const node = await getNodeDto(env.DB, input.nodeId, env.AGENT_ID);
+        const node = await getNodeDto(env.DB, input.nodeId);
         if (!node) {
           return { ok: false, error: "Node not found" };
         }
@@ -259,14 +255,17 @@ export function createTools(this: Lyzy) {
       },
     }),
     reply_comment: tool({
-      description: "Reply on another comment node",
+      description:
+        "Reply on another comment node, or you can use this tool to send multiple messages/reply to the same thread you are in",
       inputSchema: z.object({
-        threadId: nonEmptyString.describe("Comment node id to which you want to reply"),
+        threadId: optionalString.describe(
+          "Comment node id to which you want to reply, optional, if omitted use the thread id from the current contexts",
+        ),
         message: nonEmptyString.describe("Your reply"),
       }),
       contextSchema: toolSessionSchema,
       execute: async (input, { context }) => {
-        const thread = await resolveNode(context, input.threadId);
+        const thread = await resolveNode(context, input.threadId ?? context.threadId);
         if (!thread || thread.kind !== "comment") {
           return { ok: false, error: "Comment thread not found" };
         }
@@ -277,7 +276,7 @@ export function createTools(this: Lyzy) {
           userId: env.AGENT_ID,
         });
 
-        const node = await getNodeDto(env.DB, thread.id, env.AGENT_ID);
+        const node = await getNodeDto(env.DB, thread.id);
         if (node) {
           await publishNodeUpserted(env, node.workspaceId, node);
         }
@@ -288,6 +287,70 @@ export function createTools(this: Lyzy) {
           threadId: comment.threadId,
           message: comment.data,
           createdAt: comment.createdAt,
+        };
+      },
+    }),
+    set_status: tool({
+      description: `Post or update your visible status on the current thread.
+        Call this as your FIRST tool call before doing any other work — post a brief message about what you are about to do.
+        Call it again whenever you have meaningful progress to share.
+        Call it one final time with a summary when the work is complete, then return "${`<--SKIP->`}" as your final text so this status message serves as your reply.
+        If the request is purely conversational (no tool calls at all), skip this and reply directly with text.`,
+      inputSchema: z.object({
+        message: nonEmptyString.describe(
+          "Brief status message, e.g. 'On it! Creating 3 notes...' or 'Done! Created all notes and linked them.'",
+        ),
+      }),
+      contextSchema: toolSessionSchema,
+      execute: async (input, { context }) => {
+        const thread = await resolveNode(context, context.threadId);
+        if (!thread || thread.kind !== "comment") {
+          // Kickoff flow or non-comment thread — skip silently.
+          return { ok: true, skipped: true };
+        }
+
+        if (statusReplyId) {
+          const reply = await updateReplyComment(env.DB, {
+            replyId: statusReplyId,
+            message: input.message,
+            userId: env.AGENT_ID,
+          });
+          if (!reply) return { ok: false, error: "Status reply not found" };
+          const node = await getNodeDto(env.DB, thread.id);
+          if (node) {
+            const workspace = await resolveWorkspace(context, node.workspaceId);
+            if (workspace) await publishNodeUpserted(env, node.workspaceId, node);
+          }
+          return { ok: true, updated: true };
+        } else {
+          const comment = await addCommentToThread(env.DB, {
+            threadId: thread.id,
+            message: input.message,
+            userId: env.AGENT_ID,
+          });
+          statusReplyId = comment.id;
+          const node = await getNodeDto(env.DB, thread.id);
+          if (node) {
+            await publishNodeUpserted(env, node.workspaceId, node);
+          }
+          return { ok: true, created: true };
+        }
+      },
+    }),
+    list_users: tool({
+      description: `List all users in the org directory (id, name, role).
+        Use this get user id or figure out user from the details you have`,
+      inputSchema: z.object({}),
+      contextSchema: toolSessionSchema,
+      execute: async () => {
+        const users = await listUsers(env.DB);
+        return {
+          ok: true,
+          users: users.map((u) => ({
+            userId: u.id,
+            name: u.name,
+            role: u.role,
+          })),
         };
       },
     }),
@@ -307,6 +370,127 @@ export function createTools(this: Lyzy) {
           workspaceId: workspace.id,
         });
         return { ok: true, members };
+      },
+    }),
+    create_workspace: tool({
+      description: `Create a new workspace under the current project. Use this to create a new department or work area.
+        Returns the created workspace including its workspaceId.`,
+      inputSchema: z.object({
+        name: nonEmptyString.max(80).describe("Name of the new workspace"),
+        kind: optionalString.describe(
+          "Kind/type of the workspace, e.g. 'creative', 'compliance' (optional)",
+        ),
+      }),
+      contextSchema: toolSessionSchema,
+      execute: async (input, { context }) => {
+        const slug = input.name
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "");
+        const workspace = await createWorkspace(env.DB, {
+          projectId: context.projectId,
+          name: input.name,
+          kind: input.kind ?? "workspace",
+          slug: `${slug}-${crypto.randomUUID().slice(0, 8)}`,
+        });
+        if (!workspace) return { ok: false, error: "Failed to create workspace" };
+        return {
+          ok: true,
+          workspace: { workspaceId: workspace.id, name: workspace.name, kind: workspace.kind },
+        };
+      },
+    }),
+    add_member_to_workspace: tool({
+      description: `Add a user to a workspace. You can use list_users, list_workspace_members tools if needed to get full details of the user and workspace`,
+      inputSchema: z.object({
+        userId: nonEmptyString.describe("The user id to add to the workspace"),
+        workspaceId: optionalString.describe(
+          "Workspace id to add the member to. Optional, if omitted uses the current workspace",
+        ),
+      }),
+      contextSchema: toolSessionSchema,
+      execute: async (input, { context }) => {
+        const workspace = await resolveWorkspace(context, input.workspaceId);
+        if (!workspace) return { ok: false, error: "Workspace not found" };
+        await addMemberToWorkspace(env.DB, { workspaceId: workspace.id, userId: input.userId });
+        return { ok: true, workspaceId: workspace.id, userId: input.userId };
+      },
+    }),
+    update_workspace_status: tool({
+      description: `Update the status, status note, or attention field of a workspace.
+        - status: the overall state of the workspace
+        - statusNote: a short text (≤500 chars) describing current progress or what has been done
+        - attention: a short text (≤500 chars) describing what is pending or what other members need to act on`,
+      inputSchema: z.object({
+        workspaceId: optionalString.describe(
+          "Workspace id to update. Optional, if omitted updates the current workspace",
+        ),
+        status: z.enum(workspaceStatus).optional().describe("New status for the workspace"),
+        statusNote: z
+          .string()
+          .trim()
+          .max(500)
+          .optional()
+          .describe("What has been completed or current state (optional)"),
+        attention: z
+          .string()
+          .trim()
+          .max(500)
+          .optional()
+          .describe("What is pending or needs attention from team (optional)"),
+      }),
+      contextSchema: toolSessionSchema,
+      execute: async (input, { context }) => {
+        const workspace = await resolveWorkspace(context, input.workspaceId);
+        if (!workspace) return { ok: false, error: "Workspace not found" };
+        const updated = await updateWorkspaceStatus(env.DB, workspace.id, {
+          status: input.status,
+          statusNote: input.statusNote ?? undefined,
+          attention: input.attention ?? undefined,
+        });
+        if (!updated) return { ok: false, error: "Update failed" };
+        await publishWorkspaceUpdated(env, updated);
+        return {
+          ok: true,
+          workspace: {
+            workspaceId: updated.id,
+            status: updated.status,
+            statusNote: updated.statusNote,
+            attention: updated.attention,
+          },
+        };
+      },
+    }),
+    update_reply_comment: tool({
+      description: `Update the reply comment you already sent using reply_comment tool.`,
+      inputSchema: z.object({
+        replyId: nonEmptyString.describe("Reply id to update"),
+        message: nonEmptyString.describe("Updated message for the reply"),
+      }),
+      contextSchema: toolSessionSchema,
+      execute: async (input, { context }) => {
+        const reply = await updateReplyComment(env.DB, {
+          replyId: input.replyId,
+          message: input.message,
+          userId: env.AGENT_ID,
+        });
+        if (!reply) return { ok: false, error: "Reply not found" };
+
+        const node = await getNodeDto(env.DB, reply.threadId);
+        // Verify the thread node's workspace belongs to this project before publishing.
+        if (node) {
+          const workspace = await resolveWorkspace(context, node.workspaceId);
+          if (workspace) await publishNodeUpserted(env, node.workspaceId, node);
+        }
+
+        return {
+          ok: true,
+          replyId: reply.id,
+          threadId: reply.threadId,
+          message: reply.data,
+          createdAt: reply.createdAt,
+          updatedAt: reply.updatedAt,
+        };
       },
     }),
   } satisfies ToolSet;

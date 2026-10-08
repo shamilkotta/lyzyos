@@ -7,7 +7,7 @@ import { SpaceRail } from "./SpaceRail";
 import { CommandPalette } from "./CommandPalette";
 import { AttentionTray } from "./AttentionTray";
 import { attentionQueue, spaces } from "@/lib/data";
-import { useProjects } from "@/lib/queries/projects";
+import { useProjects, useProjectBoard } from "@/lib/queries/projects";
 import { railFromPathname, routeForRail, routes, type RailId } from "@/lib/routes";
 
 type View = "home" | "campaign" | "workspace";
@@ -23,6 +23,11 @@ function projectIdFromPathname(pathname: string): string | null {
   return match?.[1] ?? null;
 }
 
+function workspaceIdFromPathname(pathname: string): string | null {
+  const match = pathname.match(/^\/projects\/[^/]+\/workspaces\/([^/]+)/);
+  return match?.[1] ?? null;
+}
+
 function spaceIdFromPathname(pathname: string): string | null {
   const match = pathname.match(/^\/spaces\/([^/]+)/);
   return match?.[1] ?? null;
@@ -34,6 +39,7 @@ export function OsShell({ children }: { children: ReactNode }) {
   const view = viewFromPathname(pathname);
   const rail = railFromPathname(pathname);
   const activeProjectId = projectIdFromPathname(pathname);
+  const activeWorkspaceId = workspaceIdFromPathname(pathname);
   const activeSpaceId = spaceIdFromPathname(pathname);
 
   const [commandOpen, setCommandOpen] = useState(false);
@@ -49,7 +55,13 @@ export function OsShell({ children }: { children: ReactNode }) {
     },
   });
 
+  const { data: workspaceBoard } = useProjectBoard(activeProjectId ?? "", {
+    enabled: view === "workspace" && Boolean(activeProjectId) && Boolean(activeWorkspaceId),
+    workspaceId: activeWorkspaceId,
+  });
+
   const activeProjectName = liveProjects.find((p) => p.id === activeProjectId)?.name ?? "";
+  const activeWorkspaceName = workspaceBoard?.workspace.name;
   const spaceName = activeSpaceId
     ? (spaces.find((s) => s.id === activeSpaceId)?.name ?? activeSpaceId)
     : undefined;
@@ -101,6 +113,7 @@ export function OsShell({ children }: { children: ReactNode }) {
               ? spaceName
               : undefined
         }
+        workspaceName={activeWorkspaceName}
         onHome={goHome}
         onCommand={() => setCommandOpen(true)}
         onToggleAttention={() => setAttentionOpen((v) => !v)}
@@ -127,7 +140,7 @@ export function OsShell({ children }: { children: ReactNode }) {
         onClose={() => setCommandOpen(false)}
         onNewSpace={focusKickoff}
         onOpenCampaign={() => router.push(routes.space("secureedge"))}
-        onShowAgents={() => router.push(routes.agents)}
+        onShowAgents={() => router.push(routes.members)}
         onFocusAttention={() => setAttentionOpen(true)}
       />
     </div>

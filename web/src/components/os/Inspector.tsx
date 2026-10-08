@@ -14,6 +14,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onOpenDepartment?: (id: DepartmentId) => void;
+  onOpenWorkspace?: (workspaceId: string) => void;
   onApplyFix?: () => void;
   mode: "overview" | "branch";
   departmentId?: DepartmentId;
@@ -21,6 +22,7 @@ type Props = {
 
 function inspectorTitle(selection: InspectorSelection, mode: Props["mode"]) {
   if (selection.type === "department") return "Department";
+  if (selection.type === "workspace") return "Workspace";
   if (selection.type === "item") return selection.kind;
   if (selection.type === "member") return "Teammate";
   if (selection.type === "attention") return "Attention";
@@ -32,6 +34,7 @@ export function Inspector({
   open,
   onClose,
   onOpenDepartment,
+  onOpenWorkspace,
   onApplyFix,
   mode,
   departmentId,
@@ -41,7 +44,7 @@ export function Inspector({
   const selectionKey =
     selection.type === "none"
       ? "none"
-      : selection.type === "department"
+      : selection.type === "department" || selection.type === "workspace"
         ? selection.id
         : selection.type === "item"
           ? selection.id
@@ -70,10 +73,23 @@ export function Inspector({
       {selection.type === "department" ? (
         <DepartmentDetail id={selection.id} onOpen={() => onOpenDepartment?.(selection.id)} />
       ) : null}
+      {selection.type === "workspace" ? (
+        <WorkspaceDetail
+          key={selection.id}
+          selection={selection}
+          onOpen={() => onOpenWorkspace?.(selection.id)}
+        />
+      ) : null}
       {selection.type === "item" ? (
         <ItemDetail selection={selection} onApplyFix={onApplyFix} />
       ) : null}
-      {selection.type === "member" ? <MemberDetail member={selection.member} /> : null}
+      {selection.type === "member" ? (
+        <MemberDetail
+          key={selection.member.id}
+          member={selection.member}
+          activeIn={selection.activeIn}
+        />
+      ) : null}
       {selection.type === "attention" ? (
         <AttentionDetail
           item={selection.item}
@@ -88,7 +104,7 @@ function CampaignPulse() {
   return (
     <div className="fade-up space-y-5">
       <div>
-        <h2 className="font-serif text-[22px] leading-tight tracking-[-0.03em] text-ink">
+        <h2 className="text-[20px] font-medium leading-tight tracking-[-0.03em] text-ink">
           SecureEdge
         </h2>
         <p className="mt-1 text-[13px] text-ink-secondary">
@@ -97,8 +113,8 @@ function CampaignPulse() {
       </div>
 
       <p className="text-[13px] leading-relaxed text-ink-secondary">
-        Double-click a department to enter its workspace. Teammates work inside those rooms
-        — they are not separate steps on the graph.
+        Double-click a department to enter its workspace. Teammates work inside those rooms — they
+        are not separate steps on the graph.
       </p>
 
       <ul className="space-y-2">
@@ -288,35 +304,90 @@ function ItemDetail({
   );
 }
 
-function MemberDetail({ member }: { member: Member }) {
+export function MemberDetail({ member, activeIn }: { member: Member; activeIn?: string[] }) {
+  const places = activeIn ?? member.departmentIds.map((id) => getDepartment(id).name);
   return (
     <div className="fade-up space-y-4">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-canvas text-[12px] font-medium text-ink">
-          {member.initials}
+        <span className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-canvas text-[12px] font-medium text-ink">
+          {member.image ? (
+            // oxlint-disable-next-line next/no-img-element
+            <img src={member.image} alt="" className="h-full w-full object-cover" />
+          ) : (
+            member.initials
+          )}
         </span>
         <div>
           <h2 className="text-[16px] font-medium text-ink">{member.name}</h2>
-          <p className="text-[12px] text-ink-secondary">{member.role}</p>
+          <p className="flex items-center gap-1.5 text-[12px] text-ink-secondary">
+            <StatusDot status={member.status} />
+            {member.role}
+          </p>
         </div>
       </div>
 
       <p className="text-[13px] leading-relaxed text-ink-secondary">
-        Works the same rooms as everyone else — drafts, checks, comments, and handoffs.
+        {member.kind === "agent"
+          ? "Lives in every workspace of this project — reads the canvas, keeps project memory, and answers when tagged with @Lyzy."
+          : "Works the same rooms as everyone else — drafts, checks, comments, and handoffs."}
       </p>
 
+      {places.length > 0 ? (
+        <div>
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
+            Active in
+          </p>
+          <ul className="stagger space-y-1">
+            {places.map((name) => (
+              <li key={name} className="text-[13px] text-ink">
+                {name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function WorkspaceDetail({
+  selection,
+  onOpen,
+}: {
+  selection: Extract<InspectorSelection, { type: "workspace" }>;
+  onOpen: () => void;
+}) {
+  const complete = selection.status === "complete";
+  return (
+    <div className="fade-up space-y-4">
       <div>
-        <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-          Active in
-        </p>
-        <ul className="space-y-1">
-          {member.departmentIds.map((id) => (
-            <li key={id} className="text-[13px] text-ink">
-              {getDepartment(id).name}
-            </li>
+        <StatusBadge tone={complete ? "ok" : "info"}>
+          {complete ? "Complete" : "In progress"}
+        </StatusBadge>
+        <h2 className="mt-2 text-[18px] font-medium tracking-[-0.02em] text-ink">
+          {selection.name}
+        </h2>
+        <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">{selection.summary}</p>
+      </div>
+
+      <section>
+        <div className="mb-2 flex items-center gap-1.5 text-ink-tertiary">
+          <Users size={13} weight="bold" />
+          <span className="text-[11px] font-medium uppercase tracking-[0.05em]">
+            Team in this room
+          </span>
+        </div>
+        <ul className="stagger space-y-2">
+          {selection.members.map((m) => (
+            <MemberRow key={m.id} member={m} />
           ))}
         </ul>
-      </div>
+      </section>
+
+      <Button onClick={onOpen}>
+        Enter workspace
+        <ArrowRight size={14} weight="bold" />
+      </Button>
     </div>
   );
 }
@@ -362,16 +433,23 @@ function MemberRow({ member }: { member: Member }) {
           <p className="truncate text-[11px] text-ink-tertiary">{member.role}</p>
         </div>
       </div>
-      <span
-        className={clsx(
-          "h-1.5 w-1.5 shrink-0 rounded-full",
-          member.status === "working"
-            ? "bg-pale-green-ink"
-            : member.status === "online"
-              ? "bg-ink-tertiary"
-              : "bg-border-strong",
-        )}
-      />
+      <StatusDot status={member.status} />
     </li>
+  );
+}
+
+function StatusDot({ status }: { status: Member["status"] }) {
+  return (
+    <span
+      title={status}
+      className={clsx(
+        "h-1.5 w-1.5 shrink-0 rounded-full",
+        status === "working"
+          ? "bg-pale-green-ink"
+          : status === "online"
+            ? "bg-ink-tertiary"
+            : "bg-border-strong",
+      )}
+    />
   );
 }

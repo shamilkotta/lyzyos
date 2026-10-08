@@ -3,7 +3,7 @@
 import { House, SquaresFour, Books, Users, GearSix, Plus } from "@phosphor-icons/react";
 import clsx from "clsx";
 
-type RailId = "home" | "spaces" | "knowledge" | "agents" | "settings";
+type RailId = "home" | "spaces" | "knowledge" | "members" | "settings";
 
 type Props = {
   active: RailId;
@@ -15,7 +15,7 @@ const items: { id: RailId; label: string; icon: typeof House }[] = [
   { id: "home", label: "Home", icon: House },
   { id: "spaces", label: "Spaces", icon: SquaresFour },
   { id: "knowledge", label: "Knowledge", icon: Books },
-  { id: "agents", label: "Team", icon: Users },
+  { id: "members", label: "Members", icon: Users },
   { id: "settings", label: "Settings", icon: GearSix },
 ];
 

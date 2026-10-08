@@ -1,4 +1,5 @@
 export const queryKeys = {
+  directory: ["directory"] as const,
   projects: {
     all: ["projects"] as const,
     detail: (projectId: string) => ["projects", projectId] as const,

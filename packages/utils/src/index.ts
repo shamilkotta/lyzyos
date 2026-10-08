@@ -12,7 +12,3 @@ export async function tryCatch<T>(promise: Promise<T>): Promise<Result<T>> {
     return [null, error];
   }
 }
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}

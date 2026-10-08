@@ -15,12 +15,14 @@ import {
   type Node,
 } from "@xyflow/react";
 import {
+  WORKSPACE_NODE_PREFIX,
   buildApiProjectOverviewEdges,
   buildApiProjectOverviewNodes,
   buildBranchEdges,
   buildBranchNodes,
   buildOverviewEdges,
   buildOverviewNodes,
+  type OverviewWorkspace,
 } from "./boardBuilders";
 import {
   branchNodeTypes,
@@ -29,7 +31,6 @@ import {
   type ItemNodeData,
 } from "./nodes/CanvasNodes";
 import { isDepartmentId, type DepartmentId, type InspectorSelection } from "@/lib/types";
-import { isRecord } from "@lyzyos/utils";
 
 const placeableTools = ["comment", "note", "blocker", "instruction", "work"] as const;
 type PlaceableTool = (typeof placeableTools)[number];
@@ -45,9 +46,15 @@ type Props = {
   onSelect: (selection: InspectorSelection) => void;
   onOpenDepartment: (id: DepartmentId) => void;
   apiProjectName?: string;
-  workspaceLabel?: string;
-  onOpenWorkspace?: () => void;
+  apiWorkspaces?: OverviewWorkspace[];
+  onOpenWorkspace?: (workspaceId: string) => void;
 };
+
+function workspaceIdFromNode(nodeId: string) {
+  return nodeId.startsWith(WORKSPACE_NODE_PREFIX)
+    ? nodeId.slice(WORKSPACE_NODE_PREFIX.length)
+    : null;
+}
 
 let placeCounter = 0;
 
@@ -58,7 +65,7 @@ export function CampaignCanvas({
   onSelect,
   onOpenDepartment,
   apiProjectName,
-  workspaceLabel,
+  apiWorkspaces,
   onOpenWorkspace,
 }: Props) {
   const apiOverview = apiProjectName != null && apiProjectName.length > 0;
@@ -67,10 +74,10 @@ export function CampaignCanvas({
     () =>
       mode === "overview"
         ? apiOverview
-          ? buildApiProjectOverviewNodes(apiProjectName, workspaceLabel)
+          ? buildApiProjectOverviewNodes(apiProjectName, apiWorkspaces ?? [])
           : buildOverviewNodes()
         : buildBranchNodes(departmentId ?? "creative"),
-    [mode, departmentId, apiOverview, apiProjectName, workspaceLabel],
+    [mode, departmentId, apiOverview, apiProjectName, apiWorkspaces],
   );
   const initialEdges = useMemo(
     () =>
@@ -112,13 +119,27 @@ export function CampaignCanvas({
   const onNodeClick = useCallback(
     (event: React.MouseEvent, node: Node<BoardNodeData>) => {
       if (node.data.kind === "department") {
-        const openHit = event.target instanceof Element ? event.target.closest("[data-open-workspace]") : null;
+        const openHit =
+          event.target instanceof Element ? event.target.closest("[data-open-workspace]") : null;
         if (openHit) {
-          if (apiOverview && node.id === "workspace" && onOpenWorkspace) {
-            onOpenWorkspace();
+          const workspaceId = workspaceIdFromNode(node.id);
+          if (apiOverview && workspaceId && onOpenWorkspace) {
+            onOpenWorkspace(workspaceId);
             return;
           }
           if (isDepartmentId(node.id)) onOpenDepartment(node.id);
+          return;
+        }
+        const selectedWorkspaceId = workspaceIdFromNode(node.id);
+        if (selectedWorkspaceId) {
+          onSelect({
+            type: "workspace",
+            id: selectedWorkspaceId,
+            name: node.data.title,
+            summary: node.data.summary,
+            status: node.data.status,
+            members: node.data.members,
+          });
           return;
         }
         if (!isDepartmentId(node.id)) return;
@@ -147,8 +168,9 @@ export function CampaignCanvas({
   const onNodeDoubleClick = useCallback(
     (_: React.MouseEvent, node: Node<BoardNodeData>) => {
       if (mode === "overview" && node.data.kind === "department") {
-        if (apiOverview && node.id === "workspace" && onOpenWorkspace) {
-          onOpenWorkspace();
+        const workspaceId = workspaceIdFromNode(node.id);
+        if (apiOverview && workspaceId && onOpenWorkspace) {
+          onOpenWorkspace(workspaceId);
           return;
         }
         if (isDepartmentId(node.id)) onOpenDepartment(node.id);
@@ -238,11 +260,7 @@ export function CampaignCanvas({
         panOnDrag={tool === "hand" ? true : tool === "select" ? [1, 2] : false}
         nodesDraggable={tool === "select"}
         nodesConnectable={tool === "connect" || tool === "select"}
-        className={
-          mode === "branch" && isPlaceableTool(tool)
-            ? "cursor-crosshair"
-            : undefined
-        }
+        className={mode === "branch" && isPlaceableTool(tool) ? "cursor-crosshair" : undefined}
       >
         <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="#d3d1cb" />
         <Controls showInteractive={false} position="bottom-left" />
@@ -252,7 +270,7 @@ export function CampaignCanvas({
           zoomable
           nodeStrokeWidth={2}
           nodeColor={(n) => {
-            const kind = isRecord(n.data) && typeof n.data.kind === "string" ? n.data.kind : null;
+            const kind = typeof n.data.kind === "string" ? n.data.kind : null;
             if (kind === "blocker") return "#fdebec";
             if (kind === "comment") return "#fbf3db";
             if (kind === "instruction") return "#e1f3fe";

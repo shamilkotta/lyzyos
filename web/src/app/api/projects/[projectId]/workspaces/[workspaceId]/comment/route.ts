@@ -58,7 +58,7 @@ export async function POST(req: Request, { params }: Params) {
 
   await touchProject(env.DB, projectId);
 
-  const node = await getNodeDto(env.DB, threadId, env.AGENT_ID);
+  const node = await getNodeDto(env.DB, threadId);
   if (!node) {
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }

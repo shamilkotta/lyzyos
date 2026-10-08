@@ -145,7 +145,7 @@ export async function POST(request: Request, { params }: Params) {
 
   await touchProject(env.DB, projectId);
 
-  const node = await getNodeDto(env.DB, nodeId, env.AGENT_ID);
+  const node = await getNodeDto(env.DB, nodeId);
   if (node) {
     await publishNodeUpserted(env, userWorkspace.id, node, clientIdFromRequest(request));
   }

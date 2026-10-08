@@ -6,17 +6,16 @@ import { STANDING } from "./system";
 import { createTools } from "./tools";
 
 export class Lyzy extends Think<Env> {
-  maxSteps = 10;
+  maxSteps = 25;
   contextOverflow = { reactive: true, maxRetries: 1 };
   classifyChatError = defaultContextOverflowClassifier;
 
-  // Must be a prototype method: Durable Object RPC does not expose instance properties.
   async handleChat(input: ChatBody) {
     return handleChat.call(this, input);
   }
 
   getModel() {
-    return "@cf/moonshotai/kimi-k2.6";
+    return "@cf/moonshotai/kimi-k2.5";
   }
 
   getTools() {

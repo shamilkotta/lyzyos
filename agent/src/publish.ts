@@ -1,5 +1,11 @@
-import { isRecord } from "@lyzyos/utils";
-import type { BoardEdge, NodeDto, SyncEvent } from "@lyzyos/db";
+import {
+  listWorkspaces,
+  type BoardEdge,
+  type NodeDto,
+  type ProjectDto,
+  type SyncEvent,
+  type WorkspaceDto,
+} from "@lyzyos/db";
 
 function isDurablePublisher(value: unknown): value is {
   publish(
@@ -8,7 +14,7 @@ function isDurablePublisher(value: unknown): value is {
     originClientId?: string | null,
   ): Promise<{ seq: number }>;
 } {
-  return isRecord(value) && typeof value.publish === "function";
+  return !!value && typeof (value as any).publish === "function";
 }
 
 const AGENT_ORIGIN_CLIENT = "lyzy-agent";
@@ -36,4 +42,16 @@ export async function publishEdgeUpserted(env: Env, workspaceId: string, edge: B
     type: "edge.upserted",
     edge,
   });
+}
+
+/** Project-level changes fan out to every workspace room of the project. */
+export async function publishProjectUpdated(env: Env, project: ProjectDto) {
+  const workspaces = await listWorkspaces(env.DB, project.id);
+  await Promise.all(
+    workspaces.map((w) => publishSyncEvent(env, w.id, { type: "project.updated", project })),
+  );
+}
+
+export async function publishWorkspaceUpdated(env: Env, workspace: WorkspaceDto) {
+  await publishSyncEvent(env, workspace.id, { type: "workspace.updated", workspace });
 }

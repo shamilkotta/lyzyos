@@ -1,20 +1,31 @@
-import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createDb } from "@lyzyos/db";
 import * as authSchema from "@lyzyos/db/auth-schema";
-import { authConfig, trustedOrigins, type AuthEnv } from "./config";
+import {
+  adminPlugin,
+  baseAuthOptions,
+  trustedOrigins,
+  type AuthEnv,
+  type AuthPlugin,
+} from "./config";
+import type { EmailSender } from "./config";
 
-export type Auth = ReturnType<typeof createAuth>;
-
-export type CreateAuthOptions = {
-  plugins?: BetterAuthOptions["plugins"];
+export type CreateAuthOptions<P extends readonly AuthPlugin[] = []> = {
+  /** Extra plugins (e.g. nextCookies on web). Kept as a concrete tuple so endpoint types flow. */
+  plugins?: P;
+  sendEmail?: EmailSender;
+  adminUserIds?: string[];
   waitUntil?: (promise: Promise<unknown>) => void;
 };
 
-export function createAuth(env: AuthEnv, options: CreateAuthOptions = {}) {
+export function createAuth<const P extends readonly AuthPlugin[] = []>(
+  env: AuthEnv,
+  options: CreateAuthOptions<P> = {},
+) {
   const db = createDb(env.DB);
   return betterAuth({
-    ...authConfig,
+    ...baseAuthOptions(options.sendEmail),
     database: drizzleAdapter(db, {
       provider: "sqlite",
       schema: authSchema,
@@ -22,7 +33,7 @@ export function createAuth(env: AuthEnv, options: CreateAuthOptions = {}) {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     trustedOrigins: trustedOrigins(env.WEB_ORIGIN),
-    plugins: options.plugins ?? [],
+    plugins: [adminPlugin(options.adminUserIds), ...((options.plugins ?? []) as P)],
     ...(options.waitUntil
       ? {
           advanced: {
@@ -34,3 +45,5 @@ export function createAuth(env: AuthEnv, options: CreateAuthOptions = {}) {
       : {}),
   });
 }
+
+export type Auth = ReturnType<typeof createAuth>;

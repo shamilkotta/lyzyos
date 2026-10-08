@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { CaretDown, CaretUp, X } from "@phosphor-icons/react";
 import clsx from "clsx";
 
@@ -13,6 +13,8 @@ type Props = {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  /** When this value changes, the body scrolls to the bottom (e.g. a new message arrived). */
+  scrollToBottomKey?: string;
 };
 
 export function FloatingPanel({
@@ -24,7 +26,16 @@ export function FloatingPanel({
   children,
   footer,
   className,
+  scrollToBottomKey,
 }: Props) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollToBottomKey === undefined || collapsed) return;
+    const body = bodyRef.current;
+    if (body) body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
+  }, [scrollToBottomKey, collapsed]);
+
   return (
     <aside
       className={clsx(
@@ -64,7 +75,9 @@ export function FloatingPanel({
 
       {!collapsed ? (
         <>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">{children}</div>
+          <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+            {children}
+          </div>
           {footer ? (
             <div className="shrink-0 border-t border-border bg-surface/95 px-3 py-3">{footer}</div>
           ) : null}

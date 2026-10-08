@@ -6,6 +6,7 @@ export * from "./sync";
 export * from "./auth.schema";
 export * from "./comments";
 export * from "./constants";
+export * from "./users";
 
 export {
   projects,
@@ -20,4 +21,5 @@ export {
   schema as appSchema,
   nodeKinds,
   status,
+  workspaceStatus,
 } from "./project.schema";

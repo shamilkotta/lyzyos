@@ -7,29 +7,54 @@ import {
   getMember,
   membersForDepartment,
 } from "@/lib/data";
-import type { DepartmentId } from "@/lib/types";
+import type { DepartmentId, Member, WorkStatus } from "@/lib/types";
 import type { BoardNodeData, DepartmentNodeData } from "./nodes/CanvasNodes";
+
+export type OverviewWorkspace = {
+  id: string;
+  name: string;
+  status: WorkStatus;
+  statusNote?: string | null;
+  attention?: string | null;
+  members: Member[];
+};
+
+/** Prefix for real-workspace card ids on the project overview (vs. demo department ids). */
+export const WORKSPACE_NODE_PREFIX = "workspace:";
+
+function workspaceTone(status: WorkStatus): DepartmentNodeData["tone"] {
+  switch (status) {
+    case "complete":
+    case "ready":
+      return "ok";
+    case "blocked":
+      return "danger";
+    case "in_review":
+      return "warn";
+    default:
+      return "info";
+  }
+}
 
 export function buildApiProjectOverviewNodes(
   projectName: string,
-  workspaceLabel = "Workspace",
+  workspaces: OverviewWorkspace[],
 ): Node<BoardNodeData>[] {
-  return [
-    {
-      id: "workspace",
-      type: "department",
-      position: { x: 340, y: 280 },
-      data: {
-        kind: "department",
-        title: workspaceLabel,
-        summary: `${projectName} · open to collaborate with Lyzy`,
-        tone: "info",
-        status: "in_progress",
-        members: [],
-        openLabel: "Open",
-      } satisfies DepartmentNodeData,
-    },
-  ];
+  return workspaces.map((workspace, index) => ({
+    id: `${WORKSPACE_NODE_PREFIX}${workspace.id}`,
+    type: "department",
+    position: { x: 40 + index * 320, y: 280 },
+    data: {
+      kind: "department",
+      title: workspace.name,
+      summary: workspace.statusNote ?? `${projectName} · open to collaborate with Lyzy`,
+      tone: workspaceTone(workspace.status),
+      status: workspace.status,
+      members: workspace.members,
+      attention: workspace.attention ?? undefined,
+      openLabel: "Open",
+    } satisfies DepartmentNodeData,
+  }));
 }
 
 export function buildApiProjectOverviewEdges(): Edge[] {

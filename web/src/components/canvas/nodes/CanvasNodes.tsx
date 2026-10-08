@@ -15,6 +15,7 @@ import {
   Path,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { Markdown } from "@/components/ui/Markdown";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { DocMediaPreview, mediaKindFromPreview } from "@/components/docs/DocMediaPreview";
 import type { BranchItemKind, Member, StatusTone, WorkStatus } from "@/lib/types";
@@ -233,12 +234,16 @@ export function DepartmentNode({ data, selected }: NodeProps<Node<DepartmentNode
       </div>
 
       <h3 className="truncate text-[15px] font-medium tracking-[-0.02em] text-ink">{data.title}</h3>
-      <p className="mt-1 text-[12px] leading-relaxed text-ink-secondary">{data.summary}</p>
+      <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-ink-secondary">
+        {data.summary}
+      </p>
 
       {data.attention ? (
-        <p className="mt-2 rounded-[6px] bg-pale-yellow px-2 py-1.5 text-[11px] leading-snug text-pale-yellow-ink">
-          {data.attention}
-        </p>
+        <div className="mt-2 rounded-[6px] bg-pale-yellow px-2 py-1.5">
+          <p className="line-clamp-2 text-[11px] leading-snug text-pale-yellow-ink">
+            {data.attention}
+          </p>
+        </div>
       ) : null}
 
       {data.branchCount ? (
@@ -264,15 +269,7 @@ export function DepartmentNode({ data, selected }: NodeProps<Node<DepartmentNode
   );
 }
 
-function AuthorRow({
-  name,
-  initials,
-  meta,
-}: {
-  name?: string;
-  initials?: string;
-  meta?: string;
-}) {
+function AuthorRow({ name, initials, meta }: { name?: string; initials?: string; meta?: string }) {
   if (!name) return null;
   return (
     <div className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-tertiary">
@@ -444,6 +441,13 @@ function WorkspaceActionIcon({ action }: { action: WorkspaceCardAction }) {
 }
 void WorkspaceActionIcon;
 
+// Same kind palette as the /spaces branch items: comments yellow, documents blue.
+const KIND_CHIP: Record<WorkspaceCardData["icon"], string> = {
+  comment: "bg-pale-yellow text-pale-yellow-ink",
+  doc: "bg-pale-blue text-pale-blue-ink",
+  note: "bg-surface-soft text-ink-secondary",
+};
+
 export function WorkspaceCardNode({ data, selected }: NodeProps<Node<WorkspaceCardData>>) {
   const KindIcon =
     data.icon === "doc" ? Cube : data.icon === "comment" ? ChatCircleText : NoteBlank;
@@ -453,11 +457,16 @@ export function WorkspaceCardNode({ data, selected }: NodeProps<Node<WorkspaceCa
   const showTitle = data.title.trim().length > 0;
 
   return (
-    <NodeShell selected={selected} width={260}>
+    <NodeShell selected={selected} width={260} className="node-enter">
       <Handles />
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-surface-soft py-0.5 pl-1 pr-2 text-[10px] font-medium uppercase tracking-[0.05em] text-ink-secondary">
+          <span
+            className={clsx(
+              "inline-flex max-w-full items-center gap-1 rounded-full py-0.5 pl-1 pr-2 text-[10px] font-medium uppercase tracking-[0.05em]",
+              KIND_CHIP[data.icon],
+            )}
+          >
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface text-ink">
               <KindIcon size={12} weight="bold" />
             </span>
@@ -480,14 +489,14 @@ export function WorkspaceCardNode({ data, selected }: NodeProps<Node<WorkspaceCa
         </h3>
       ) : null}
       {!isDoc && data.summary ? (
-        <p
+        <div
           className={clsx(
-            "line-clamp-3 text-[12px] leading-relaxed text-ink-secondary",
+            "relative max-h-[76px] overflow-hidden [mask-image:linear-gradient(to_bottom,black_70%,transparent)]",
             showTitle && "mt-1",
           )}
         >
-          {data.summary}
-        </p>
+          <Markdown variant="compact">{data.summary}</Markdown>
+        </div>
       ) : null}
 
       {data.preview ? (

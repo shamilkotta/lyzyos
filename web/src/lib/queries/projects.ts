@@ -2,11 +2,17 @@
 
 import { useMutation, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
 import {
+  addProjectMembers,
+  addWorkspaceMembers,
+  createMember,
   createProject,
+  createWorkspace,
   getProject,
   getWorkspaceBoard,
   listProjects,
+  listDirectory,
   listProjectWorkspaces,
+  updateWorkspace,
 } from "@/lib/api";
 import type { ApiProjectListItem } from "@/lib/project-types";
 import { queryKeys } from "@/lib/query-keys";
@@ -43,12 +49,6 @@ export function useProjectWorkspaces(projectId: string, options?: { enabled?: bo
   });
 }
 
-export function useDefaultWorkspace(projectId: string, options?: { enabled?: boolean }) {
-  const query = useProjectWorkspaces(projectId, options);
-  const workspace = query.data?.[0] ?? null;
-  return { ...query, workspace, workspaceId: workspace?.id ?? null };
-}
-
 export function useProjectBoard(
   projectId: string,
   options?: { enabled?: boolean; workspaceId?: string | null },
@@ -82,6 +82,78 @@ export function useCreateProject() {
           queryKey: queryKeys.projects.board(result.projectId, result.workspaceId),
         });
       }
+    },
+  });
+}
+
+export function useDirectory() {
+  return useQuery({
+    queryKey: queryKeys.directory,
+    queryFn: listDirectory,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useCreateMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createMember,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.directory });
+    },
+  });
+}
+
+export function useCreateWorkspace(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; kind?: string }) => createWorkspace(projectId, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.workspaces(projectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+    },
+  });
+}
+
+export function useUpdateWorkspace(projectId: string, workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      status?: string;
+      statusNote?: string | null;
+      attention?: string | null;
+    }) => updateWorkspace(projectId, workspaceId, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.workspaces(projectId) });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.board(projectId, workspaceId),
+      });
+    },
+  });
+}
+
+export function useAddWorkspaceMembers(projectId: string, workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userIds: string[]) => addWorkspaceMembers(projectId, workspaceId, userIds),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.board(projectId, workspaceId),
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.workspaces(projectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+    },
+  });
+}
+
+export function useAddProjectMembers(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userIds: string[]) => addProjectMembers(projectId, userIds),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.workspaces(projectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
     },
   });
 }

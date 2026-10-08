@@ -30,6 +30,7 @@ export type SyncPeer = z.infer<typeof syncPeerSchema>;
 export const syncEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("board.replace"), board: boardSnapshotSchema }),
   z.object({ type: z.literal("project.updated"), project: projectDtoSchema }),
+  z.object({ type: z.literal("workspace.updated"), workspace: workspaceDtoSchema }),
   z.object({ type: z.literal("node.upserted"), node: nodeDtoSchema }),
   z.object({ type: z.literal("node.removed"), nodeId: z.string() }),
   z.object({ type: z.literal("edge.upserted"), edge: boardEdgeSchema }),
@@ -88,7 +89,6 @@ export type ServerToClientMessage = z.infer<typeof serverToClientMessageSchema>;
 
 export const workspaceBoardSchema = boardSnapshotSchema.extend({
   members: z.array(memberPreviewSchema),
-  agentId: z.string(),
 });
 export type WorkspaceBoard = z.infer<typeof workspaceBoardSchema>;
 

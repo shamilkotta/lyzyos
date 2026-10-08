@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import clsx from "clsx";
 import {
   Background,
   BackgroundVariant,
@@ -19,7 +20,19 @@ import {
   type Node,
   type NodeChange,
 } from "@xyflow/react";
-import { ArrowUp, FileText, SpinnerGap, Trash } from "@phosphor-icons/react";
+import {
+  ArrowUp,
+  CaretDown,
+  CaretLeft,
+  CaretUp,
+  Check,
+  FileText,
+  PencilSimple,
+  Plus,
+  SpinnerGap,
+  Trash,
+  Warning,
+} from "@phosphor-icons/react";
 import {
   workspaceNodeTypes,
   type BoardNodeData,
@@ -39,6 +52,8 @@ import { FloatingPanel } from "@/components/os/FloatingPanel";
 import { TeamPresence } from "@/components/os/TeamPresence";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
+import { Markdown, type MentionTarget } from "@/components/ui/Markdown";
+import { AddMembersPanel } from "@/components/os/AddMembersPanel";
 import {
   addProjectDocument,
   createProjectEdge,
@@ -52,13 +67,26 @@ import { debounce, type Debounced } from "@/lib/debounce";
 import { PROJECT_DOC_ACCEPT, filterAllowedProjectDocs } from "@/lib/docs";
 import type { BoardState, BoardNode } from "@/lib/project-types";
 import { documentFileUrl, isCommentNode, isDocNode } from "@/lib/project-types";
-import { useProjectBoard } from "@/lib/queries/projects";
+import { useAddWorkspaceMembers, useProjectBoard } from "@/lib/queries/projects";
 import { routes } from "@/lib/routes";
 import { useCurrentUser } from "@/lib/session";
 import { useProjectSync } from "@/lib/useProjectSync";
 import type { Member } from "@/lib/types";
 
 const POSITION_SAVE_MS = 450;
+
+const MINIMAP_COLORS = {
+  comment: "#fbf3db",
+  note: "#ffffff",
+  doc: "#e1f3fe",
+} as const;
+
+const SYNC_LABEL = {
+  connecting: "Connecting…",
+  live: "Synced",
+  reconnecting: "Reconnecting…",
+  offline: "Offline",
+} as const;
 const META_SAVE_MS = 550;
 
 type Props = {
@@ -229,8 +257,14 @@ function WorkspaceCanvas({
       edgesFocusable={tool === "select"}
       className={placeable ? "cursor-crosshair" : undefined}
     >
-      <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#e8e6e0" />
-      <MiniMap pannable zoomable className="!rounded-[8px] !border !border-border !bg-surface" />
+      <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="#d3d1cb" />
+      <MiniMap
+        pannable
+        zoomable
+        nodeStrokeWidth={2}
+        nodeColor={(n) => MINIMAP_COLORS[n.data?.icon as keyof typeof MINIMAP_COLORS] ?? "#ffffff"}
+        className="!rounded-[8px] !border !border-border !bg-surface"
+      />
       <Controls
         showInteractive={false}
         className="!rounded-[8px] !border !border-border !shadow-none"
@@ -246,16 +280,20 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
     error: boardError,
     refetch: refetchBoard,
   } = useProjectBoard(projectId, { workspaceId: routeWorkspaceId });
+  const { mutateAsync: addMembersAsync } = useAddWorkspaceMembers(projectId, routeWorkspaceId);
   const [board, setBoard] = useState<BoardState | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftBody, setDraftBody] = useState("");
   const [answer, setAnswer] = useState("");
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [tool, setTool] = useState<CanvasTool>("select");
   const removedEdgeIds = useRef(new Set<string>());
   const removedNodeIds = useRef(new Set<string>());
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [attentionExpanded, setAttentionExpanded] = useState(false);
+  const [addMembersOpen, setAddMembersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingDocPos = useRef<{ x: number; y: number } | null>(null);
@@ -275,17 +313,17 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
   const workspaceId = board?.workspace.id ?? boardData?.workspace.id ?? routeWorkspaceId;
   const syncWorkspaceId = board?.workspace.id ?? boardData?.workspace.id ?? routeWorkspaceId;
   const workspaceName = board?.workspace.name ?? boardData?.workspace.name ?? "Workspace";
+  const workspaceStatus = board?.workspace.status ?? boardData?.workspace.status ?? "in_progress";
+  const workspaceAttention = board?.workspace.attention ?? boardData?.workspace.attention ?? null;
 
   const resolvedBoard = useMemo((): BoardState | null => {
     if (board?.projectId === projectId) {
-      if (
-        board.members.length === 0 &&
-        boardData?.projectId === projectId &&
-        boardData.members.length > 0
-      ) {
-        return { ...board, members: boardData.members };
-      }
-      return board;
+      // Sync snapshots carry nodes/edges only; roster and agent id come from the REST board,
+      // which may land after the first snapshot. Fill whatever the live board is missing.
+      const fallback = boardData?.projectId === projectId ? boardData : null;
+      const members = board.members.length > 0 ? board.members : (fallback?.members ?? []);
+      if (members === board.members) return board;
+      return { ...board, members };
     }
     if (!boardData || boardData.projectId !== projectId) return null;
     return boardData;
@@ -371,15 +409,28 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
 
   const presenceMembers = useMemo<Member[]>(() => {
     const onlineNames = new Set(peers.map((p) => p.name));
-    const agentId = resolvedBoard?.agentId ?? "";
-    const roster = membersFromWorkspace(resolvedBoard?.members ?? [], onlineNames, agentId);
+    const roster = membersFromWorkspace(resolvedBoard?.members ?? [], onlineNames);
     if (roster.length > 0) return roster;
     return membersFromWorkspace(
       peers.map((p) => ({ id: p.clientId, name: p.name })),
       onlineNames,
-      agentId,
     );
-  }, [peers, resolvedBoard?.agentId, resolvedBoard?.members]);
+  }, [peers, resolvedBoard?.members]);
+
+  const mentionTargets = useMemo<MentionTarget[]>(
+    () =>
+      (resolvedBoard?.members ?? []).map((m) => ({
+        id: m.id,
+        name: m.name,
+        kind: m.kind,
+      })),
+    [resolvedBoard?.members],
+  );
+
+  const workspaceMemberIds = useMemo(
+    () => new Set((resolvedBoard?.members ?? []).map((m) => m.id)),
+    [resolvedBoard?.members],
+  );
 
   const selected = useMemo(
     () => resolvedBoard?.nodes.find((n) => n.id === selectedId) ?? null,
@@ -441,9 +492,18 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
         setSelectedEdgeId(null);
         setTool("select");
         setPanelCollapsed(false);
+        setAddMembersOpen(false);
       }
     },
     [publishPresence],
+  );
+
+  const handleAddMembers = useCallback(
+    async (userIds: string[]) => {
+      const { members } = await addMembersAsync(userIds);
+      updateBoard((prev) => ({ ...prev, members }));
+    },
+    [addMembersAsync, updateBoard],
   );
 
   const onSelectEdge = useCallback((id: string | null) => {
@@ -681,6 +741,7 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
     (selected.kind === "note" || selected.kind === "doc");
   const editableDoc = selected && editable && isDocNode(selected) ? selected : null;
   const isComment = selected != null && isCommentNode(selected);
+  const editingBody = selected != null && editingNodeId === selected.id;
 
   useEffect(() => {
     if (!editable || !selected || !metaDirtyRef.current) return;
@@ -765,31 +826,106 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
 
   return (
     <div className="relative h-full min-h-0">
-      <div className="pointer-events-none absolute left-4 top-4 z-10 flex items-center gap-2">
-        <div className="pointer-events-auto flex items-baseline gap-2 rounded-[8px] border border-border bg-surface/95 px-3 py-2 backdrop-blur-md">
-          <span className="text-[13px] font-medium tracking-[-0.02em] text-ink">
-            {workspaceName}
-          </span>
-          <span className="text-[12px] text-ink-tertiary">·</span>
-          <span
-            className={
-              syncStatus === "live"
-                ? "text-[12px] text-ink-secondary"
-                : syncStatus === "reconnecting"
-                  ? "text-[12px] text-amber-800"
-                  : "text-[12px] text-ink-tertiary"
+      <div className="fade-up pointer-events-none absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-wrap items-start gap-2">
+        <Button
+          variant="secondary"
+          className="pointer-events-auto h-8 shrink-0"
+          onClick={() => router.push(routes.project(projectId))}
+        >
+          <CaretLeft size={14} weight="bold" />
+          Campaign graph
+        </Button>
+
+        <div className="pointer-events-auto flex h-8 shrink-0 items-center gap-2 rounded-[8px] border border-border bg-surface/95 px-3 backdrop-blur-md">
+          <span className="text-[13px] font-medium text-ink">{workspaceName}</span>
+          <StatusBadge
+            tone={
+              workspaceStatus === "complete" || workspaceStatus === "ready"
+                ? "ok"
+                : workspaceStatus === "blocked"
+                  ? "danger"
+                  : workspaceStatus === "in_review"
+                    ? "warn"
+                    : "info"
             }
           >
-            {syncStatus === "live"
-              ? "Synced"
-              : syncStatus === "reconnecting"
-                ? "Reconnecting…"
-                : syncStatus === "connecting"
-                  ? "Connecting…"
-                  : "Offline"}
+            {workspaceStatus === "complete"
+              ? "Complete"
+              : workspaceStatus === "ready"
+                ? "Ready"
+                : workspaceStatus === "blocked"
+                  ? "Blocked"
+                  : workspaceStatus === "in_review"
+                    ? "In review"
+                    : workspaceStatus === "not_started"
+                      ? "Not started"
+                      : "In progress"}
+          </StatusBadge>
+          <span
+            title={SYNC_LABEL[syncStatus]}
+            aria-label={SYNC_LABEL[syncStatus]}
+            className="flex items-center gap-1.5 text-[11px] text-ink-tertiary"
+          >
+            <span
+              className={clsx(
+                "h-1.5 w-1.5 rounded-full",
+                syncStatus === "live"
+                  ? "bg-pale-green-ink"
+                  : syncStatus === "offline"
+                    ? "bg-ink-tertiary"
+                    : "animate-pulse bg-pale-yellow-ink",
+              )}
+            />
+            {syncStatus === "live" ? null : SYNC_LABEL[syncStatus]}
           </span>
         </div>
-        {presenceMembers.length > 0 ? <TeamPresence members={presenceMembers} /> : null}
+
+        {workspaceAttention ? (
+          <button
+            type="button"
+            onClick={() => setAttentionExpanded((v) => !v)}
+            aria-expanded={attentionExpanded}
+            className={clsx(
+              "pointer-events-auto flex min-w-0 max-w-md gap-1.5 rounded-[8px] bg-pale-yellow px-2.5 text-left text-[12px] leading-snug text-pale-yellow-ink shadow-sm backdrop-blur-md transition-colors hover:brightness-[0.98]",
+              attentionExpanded ? "items-start py-2" : "h-8 items-center",
+            )}
+          >
+            <Warning size={13} weight="bold" className="shrink-0" />
+            <span className={clsx("min-w-0 flex-1", !attentionExpanded && "line-clamp-1")}>
+              {workspaceAttention}
+            </span>
+            {attentionExpanded ? (
+              <CaretUp size={12} weight="bold" className="mt-0.5 shrink-0 opacity-70" />
+            ) : (
+              <CaretDown size={12} weight="bold" className="shrink-0 opacity-70" />
+            )}
+          </button>
+        ) : null}
+
+        <div className="pointer-events-auto flex h-8 items-center">
+          <TeamPresence
+            members={presenceMembers}
+            activeInFor={() => [workspaceName]}
+            trailing={
+              <button
+                type="button"
+                aria-label="Add workspace members"
+                aria-expanded={addMembersOpen}
+                onClick={() => {
+                  setSelectedId(null);
+                  setSelectedEdgeId(null);
+                  setAddMembersOpen(true);
+                }}
+                className={clsx(
+                  "relative flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-border/80 bg-surface text-ink-secondary shadow-sm transition-transform hover:z-10 hover:scale-105 hover:border-ink/30 hover:text-ink",
+                  addMembersOpen && "z-10 border-ink/40 text-ink ring-2 ring-ink/15",
+                )}
+              >
+                <Plus size={12} weight="bold" />
+              </button>
+            }
+          />
+        </div>
       </div>
 
       <input
@@ -823,6 +959,17 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
 
       <CanvasToolbar mode="workspace" tool={tool} onTool={setTool} />
 
+      {addMembersOpen ? (
+        <AddMembersPanel
+          title="Add members"
+          alreadyLabel="Already on workspace"
+          emptyAvailableLabel="Everyone is already on this workspace"
+          memberIds={workspaceMemberIds}
+          onClose={() => setAddMembersOpen(false)}
+          onSubmit={handleAddMembers}
+        />
+      ) : null}
+
       {selected ? (
         <div className="pointer-events-none absolute inset-0 z-20">
           <FloatingPanel
@@ -830,6 +977,9 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
             collapsed={panelCollapsed}
             onCollapsedChange={setPanelCollapsed}
             onClose={() => onSelect(null)}
+            scrollToBottomKey={
+              isCommentNode(selected) ? `${selected.id}:${selected.replies.length}` : undefined
+            }
             footer={
               isComment ? (
                 <div className="space-y-1.5">
@@ -868,7 +1018,7 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
               ) : undefined
             }
           >
-            <section className="flex min-h-full flex-col gap-3">
+            <section key={selected.id} className="fade-up flex min-h-full flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge
                   tone={
@@ -955,9 +1105,9 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
                       <p className="text-[11px] font-medium text-ink-secondary">
                         {selected.authorName}
                       </p>
-                      <p className="mt-0.5 whitespace-pre-wrap text-[13px] leading-relaxed text-ink">
+                      <Markdown className="mt-0.5" mentions={mentionTargets}>
                         {selected.body}
-                      </p>
+                      </Markdown>
                     </div>
                   ) : (selected.replies?.length ?? 0) === 0 ? (
                     <p className="px-1 text-[13px] text-ink-tertiary">
@@ -973,9 +1123,9 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
                       <p className="text-[11px] font-medium text-ink-secondary">
                         {reply.authorName}
                       </p>
-                      <p className="mt-0.5 whitespace-pre-wrap text-[13px] leading-relaxed text-ink">
+                      <Markdown className="mt-0.5" mentions={mentionTargets}>
                         {reply.body}
-                      </p>
+                      </Markdown>
                     </div>
                   ))}
                 </div>
@@ -991,16 +1141,57 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
                     className="w-full rounded-[8px] border border-border bg-canvas px-3 py-2 text-[15px] font-medium tracking-[-0.02em] text-ink outline-none"
                     placeholder="Title"
                   />
-                  <textarea
-                    value={draftBody}
-                    onChange={(e) => {
-                      markMetaDirty();
-                      setDraftBody(e.target.value);
-                    }}
-                    onBlur={() => debouncedMetaSave.current?.flush()}
-                    placeholder="Constraints, context, decisions…"
-                    className="min-h-[200px] w-full flex-1 resize-none rounded-[8px] border border-border bg-canvas px-3 py-3 text-[13px] leading-relaxed text-ink outline-none"
-                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-ink-tertiary">
+                      {editingBody ? "Markdown supported" : null}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editingBody) debouncedMetaSave.current?.flush();
+                        setEditingNodeId(editingBody ? null : selected.id);
+                      }}
+                      className="flex h-7 items-center gap-1.5 rounded-[6px] px-2 text-[12px] text-ink-secondary transition-colors hover:bg-surface-soft hover:text-ink"
+                    >
+                      {editingBody ? (
+                        <Check size={13} weight="bold" />
+                      ) : (
+                        <PencilSimple size={13} weight="bold" />
+                      )}
+                      {editingBody ? "Done" : "Edit"}
+                    </button>
+                  </div>
+                  {editingBody ? (
+                    <textarea
+                      autoFocus
+                      value={draftBody}
+                      onChange={(e) => {
+                        markMetaDirty();
+                        setDraftBody(e.target.value);
+                      }}
+                      onBlur={() => debouncedMetaSave.current?.flush()}
+                      placeholder="Constraints, context, decisions… (markdown supported)"
+                      className="min-h-[200px] w-full flex-1 resize-none rounded-[8px] border border-border bg-canvas px-3 py-3 text-[13px] leading-relaxed text-ink outline-none"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onDoubleClick={() => setEditingNodeId(selected.id)}
+                      onClick={() => {
+                        if (!draftBody.trim()) setEditingNodeId(selected.id);
+                      }}
+                      title="Double-click to edit"
+                      className="min-h-[200px] w-full flex-1 cursor-text rounded-[8px] border border-border bg-canvas px-3 py-3 text-left"
+                    >
+                      {draftBody.trim() ? (
+                        <Markdown>{draftBody}</Markdown>
+                      ) : (
+                        <span className="text-[13px] text-ink-tertiary">
+                          Constraints, context, decisions… Click to write.
+                        </span>
+                      )}
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
@@ -1025,9 +1216,11 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
                     </div>
                   ) : (
                     <div className="rounded-[8px] border border-border bg-canvas px-3 py-3">
-                      <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">
-                        {selected.body.trim().length > 0 ? selected.body : "No content yet."}
-                      </p>
+                      {selected.body.trim().length > 0 ? (
+                        <Markdown>{selected.body}</Markdown>
+                      ) : (
+                        <p className="text-[13px] text-ink-tertiary">No content yet.</p>
+                      )}
                     </div>
                   )}
                 </>

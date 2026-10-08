@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { BoardEdge, NodeDto, SyncEvent } from "@lyzyos/db";
+import type { BoardEdge, NodeDto, SyncEvent, WorkspaceDto } from "@lyzyos/db";
 import type { AppEnv } from "../env";
 
 export function clientIdFromRequest(request: Request) {
@@ -67,4 +67,17 @@ export async function publishEdgeRemoved(
   originClientId: string | null = null,
 ) {
   await publishSyncEvent(env, workspaceId, { type: "edge.removed", edgeId }, originClientId);
+}
+
+export async function publishWorkspaceUpdated(
+  env: AppEnv,
+  workspace: WorkspaceDto,
+  originClientId: string | null = null,
+) {
+  await publishSyncEvent(
+    env,
+    workspace.id,
+    { type: "workspace.updated", workspace },
+    originClientId,
+  );
 }

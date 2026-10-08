@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Instrument_Serif, Space_Grotesk } from "next/font/google";
+import { Geist_Mono, Space_Grotesk } from "next/font/google";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import "./globals.css";
 
@@ -8,17 +8,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Wordmark face for the product name.
+// Wordmark face for the product name (LyzyOS).
 const brand = Space_Grotesk({
   variable: "--font-space-grotesk",
   subsets: ["latin"],
   weight: ["500", "600"],
-});
-
-const instrument = Instrument_Serif({
-  variable: "--font-instrument",
-  subsets: ["latin"],
-  weight: "400",
 });
 
 export const metadata: Metadata = {
@@ -28,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geistMono.variable} ${brand.variable} ${instrument.variable} h-full antialiased`}>
+    <html lang="en" className={`${geistMono.variable} ${brand.variable} h-full antialiased`}>
       <body className="min-h-full font-mono">
         <QueryProvider>{children}</QueryProvider>
       </body>

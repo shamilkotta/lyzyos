@@ -21,7 +21,12 @@ const MAX_EVENT_LOG = 200;
 
 function isAttachment(value: unknown): value is Attachment {
   if (typeof value !== "object" || value === null) return false;
-  if (!("clientId" in value) || !("name" in value) || !("color" in value) || !("joinedAt" in value)) {
+  if (
+    !("clientId" in value) ||
+    !("name" in value) ||
+    !("color" in value) ||
+    !("joinedAt" in value)
+  ) {
     return false;
   }
   return (
@@ -62,7 +67,7 @@ export class WorkspaceSync extends DurableObject<Env> {
       return new Response("workspaceId required", { status: 400 });
     }
 
-    const board = await loadBoard(this.env.DB, workspaceId, this.env.AGENT_ID);
+    const board = await loadBoard(this.env.DB, workspaceId);
     if (!board) {
       return new Response("Workspace not found", { status: 404 });
     }
@@ -181,16 +186,14 @@ export class WorkspaceSync extends DurableObject<Env> {
   ): Promise<void> {
     try {
       ws.close(code, reason);
-    } catch {
-    }
+    } catch {}
     this.broadcastPresence(this.storedWorkspaceId() ?? "", this.storedProjectId() ?? "");
   }
 
   async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
     try {
       ws.close(1011, "error");
-    } catch {
-    }
+    } catch {}
     this.broadcastPresence(this.storedWorkspaceId() ?? "", this.storedProjectId() ?? "");
   }
 
@@ -281,16 +284,14 @@ export class WorkspaceSync extends DurableObject<Env> {
     for (const ws of this.ctx.getWebSockets()) {
       try {
         ws.send(payload);
-      } catch {
-      }
+      } catch {}
     }
   }
 
   private send(ws: WebSocket, message: ServerToClientMessage) {
     try {
       ws.send(JSON.stringify(message));
-    } catch {
-    }
+    } catch {}
   }
 }
 

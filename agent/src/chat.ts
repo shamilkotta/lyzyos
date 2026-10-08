@@ -11,10 +11,16 @@ import type { ChatBody } from "./schema";
 import { COMPACT_AFTER_TOKENS, SKIP_MARKER } from "./system";
 import { toolsContextFor, type ToolSession } from "./tools";
 
+type StepContentPart =
+  | { type: "text"; text: string }
+  | { type: "tool-call"; toolCallId: string; toolName: string; input: unknown }
+  | { type: "tool-result"; toolCallId: string; output: unknown }
+  | { type: "tool-error"; toolCallId: string; error: unknown }
+  | { type: string };
+
 type GenerateResult = {
   text: string;
-  toolCalls: Array<{ toolCallId: string; toolName: string; input: unknown }>;
-  toolResults: Array<{ toolCallId: string; output: unknown }>;
+  steps: ReadonlyArray<{ content: ReadonlyArray<StepContentPart> }>;
 };
 
 export async function handleChat(this: Lyzy, input: ChatBody) {
@@ -22,14 +28,19 @@ export async function handleChat(this: Lyzy, input: ChatBody) {
   const session: ToolSession = {
     projectId: input.projectId,
     workspaceId: input.workspaceId,
+    threadId: input.threadId,
   };
 
   const history = await thread.getHistory();
-  const existingIds = new Set<string>();
+
+  const existingIds = new Set(
+    history.map((message) => message.id).filter((id): id is string => Boolean(id)),
+  );
   if (!history.length) {
     await hydrateThreadHistory.call(this, thread, input.threadId, existingIds);
   }
 
+  let appended = false;
   for (const message of input.message) {
     if (existingIds.has(message.id)) continue;
 
@@ -45,6 +56,12 @@ export async function handleChat(this: Lyzy, input: ChatBody) {
       ],
     };
     await thread.appendMessage(uiMessage as SessionMessage);
+    existingIds.add(message.id);
+    appended = true;
+  }
+
+  if (!appended && history.length) {
+    return { text: "", threadId: input.threadId };
   }
 
   const result = await runThreadTurn.call(this, thread, session, { allowOverflowRetry: true });
@@ -78,7 +95,7 @@ async function postReply(this: Lyzy, input: ChatBody, text: string) {
     message: text,
     userId: this.env.AGENT_ID,
   });
-  const node = await getNodeDto(this.env.DB, thread.id, this.env.AGENT_ID);
+  const node = await getNodeDto(this.env.DB, thread.id);
   if (node) await publishNodeUpserted(this.env, node.workspaceId, node);
 }
 
@@ -170,24 +187,48 @@ async function summarize(this: Lyzy, prompt: string): Promise<string> {
   return result.text;
 }
 
+/**
+ * Persists the whole turn: every step's tool calls (with their result or error) and text.
+ * Recording errors matters — otherwise a failed call is stored as a null output and the model
+ * later reads it as "the tool returned nothing".
+ */
 function assistantMessageFromResult(result: GenerateResult): UIMessage {
   const parts: UIMessage["parts"] = [];
 
-  for (const call of result.toolCalls) {
-    const matched = result.toolResults.find((r) => r.toolCallId === call.toolCallId);
-    parts.push({
-      type: `tool-${call.toolName}`,
-      toolCallId: call.toolCallId,
-      toolName: call.toolName,
-      state: "output-available",
-      input: call.input,
-      output: matched?.output,
-    } as UIMessage["parts"][number]);
-  }
+  for (const step of result.steps) {
+    const outcomes = new Map<string, { output?: unknown; error?: unknown }>();
+    for (const part of step.content) {
+      if (part.type === "tool-result" && "output" in part) {
+        outcomes.set(part.toolCallId, { output: part.output });
+      } else if (part.type === "tool-error" && "error" in part) {
+        outcomes.set(part.toolCallId, { error: part.error });
+      }
+    }
 
-  const text = result.text.trim();
-  if (text.length > 0) {
-    parts.push({ type: "text", text });
+    for (const part of step.content) {
+      if (part.type === "text" && "text" in part && part.text.trim()) {
+        parts.push({ type: "text", text: part.text.trim() });
+      } else if (part.type === "tool-call" && "toolName" in part) {
+        const outcome = outcomes.get(part.toolCallId);
+        parts.push(
+          (outcome && "error" in outcome
+            ? {
+                type: `tool-${part.toolName}`,
+                toolCallId: part.toolCallId,
+                state: "output-error",
+                input: part.input,
+                errorText: errorText(outcome.error),
+              }
+            : {
+                type: `tool-${part.toolName}`,
+                toolCallId: part.toolCallId,
+                state: "output-available",
+                input: part.input,
+                output: outcome?.output ?? null,
+              }) as UIMessage["parts"][number],
+        );
+      }
+    }
   }
 
   if (parts.length === 0) {
@@ -199,4 +240,8 @@ function assistantMessageFromResult(result: GenerateResult): UIMessage {
     role: "assistant",
     parts,
   };
+}
+
+function errorText(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
