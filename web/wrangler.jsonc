@@ -7,7 +7,6 @@
   "vars": {
     "BETTER_AUTH_URL": "https://lyzyos.shamilkotta.workers.dev",
     "WEB_ORIGIN": "https://lyzyos.shamilkotta.workers.dev",
-    "NEXT_PUBLIC_SYNC_URL": "https://lyzy-sync.shamilkotta.workers.dev",
   },
   "services": [
     {
