@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev -c wrangler.jsonc -c ../agent/wrangler.jsonc --port 8788 --persist-to ../.wrangler/state",
+    "build": "wrangler build",
     "check": "wrangler types && tsc --noEmit",
     "types": "wrangler types",
     "lint": "oxlint ."
@@ -15,5 +16,6 @@
   "devDependencies": {
     "typescript": "^5.9.3",
     "wrangler": "^4.147.0"
-  }
+  },
+  "packageManager": "pnpm@11.1.1"
 }
