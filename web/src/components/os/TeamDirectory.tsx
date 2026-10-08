@@ -209,11 +209,7 @@ export function TeamDirectory() {
             </p>
           </div>
           {isAdmin && !addOpen ? (
-            <Button
-              variant="secondary"
-              className="shrink-0"
-              onClick={() => setAddOpen(true)}
-            >
+            <Button variant="secondary" className="shrink-0" onClick={() => setAddOpen(true)}>
               <Plus size={14} weight="bold" />
               Add member
             </Button>

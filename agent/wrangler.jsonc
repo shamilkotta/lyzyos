@@ -13,10 +13,7 @@
   "dev": {
     "port": 8787,
   },
-  "vars": {
-    "AGENT_ID": "123-321",
-    "INTERNAL_SECRET": "dev-secret-change-in-prod",
-  },
+  "vars": {},
   "ai": {
     "binding": "AI",
     "remote": true,

@@ -50,7 +50,5 @@ next-env.d.ts
 .wrangler/
 .dev.vars
 **/.dev.vars
-agent/worker-configuration.d.ts
-api/worker-configuration.d.ts
 
 .pnpm-store/

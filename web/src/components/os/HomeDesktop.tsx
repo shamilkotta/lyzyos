@@ -153,8 +153,14 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                       className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-soft"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <CirclesFour size={14} className="shrink-0 text-ink-tertiary" weight="bold" />
-                        <span className="truncate text-[13px] font-medium text-ink">{project.name}</span>
+                        <CirclesFour
+                          size={14}
+                          className="shrink-0 text-ink-tertiary"
+                          weight="bold"
+                        />
+                        <span className="truncate text-[13px] font-medium text-ink">
+                          {project.name}
+                        </span>
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
                         <span className="flex items-center gap-1 text-[11px] text-ink-tertiary">
@@ -164,7 +170,10 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                         <StatusBadge tone={project.status === "in_progress" ? "info" : "ok"}>
                           {project.status === "in_progress" ? "In progress" : "Complete"}
                         </StatusBadge>
-                        <ArrowRight size={12} className="text-ink-tertiary opacity-0 transition-opacity group-hover:opacity-100" />
+                        <ArrowRight
+                          size={12}
+                          className="text-ink-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+                        />
                       </div>
                     </button>
                   </li>
@@ -185,7 +194,9 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-[13px] text-ink-secondary">Total projects</span>
-                    <span className="font-mono text-[20px] font-semibold text-ink">{liveProjects.length}</span>
+                    <span className="font-mono text-[20px] font-semibold text-ink">
+                      {liveProjects.length}
+                    </span>
                   </div>
                   <div className="h-px bg-border" />
                   <div className="flex items-center justify-between">
@@ -208,7 +219,12 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                     <div className="mb-1.5 flex justify-between text-[11px] text-ink-tertiary">
                       <span>Progress</span>
                       <span>
-                        {Math.round((liveProjects.filter((p) => p.status !== "in_progress").length / liveProjects.length) * 100)}%
+                        {Math.round(
+                          (liveProjects.filter((p) => p.status !== "in_progress").length /
+                            liveProjects.length) *
+                            100,
+                        )}
+                        %
                       </span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-canvas">
