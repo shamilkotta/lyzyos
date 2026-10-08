@@ -91,7 +91,8 @@ export function workspaceSyncWsUrl(
   workspaceId: string,
   params: { clientId: string; name: string },
 ) {
-  const base = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const base =
+    process.env.NEXT_PUBLIC_SYNC_URL ?? "http://localhost:8788";
   const url = new URL(`/api/workspaces/${workspaceId}/sync`, base);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.searchParams.set("clientId", params.clientId);

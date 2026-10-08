@@ -8,7 +8,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "wrangler dev -c ../api/wrangler.jsonc -c wrangler.jsonc --port 8788 --persist-to ../.wrangler/state",
+    "dev": "wrangler dev -c ../sync/wrangler.jsonc -c wrangler.jsonc --port 8788 --persist-to ../.wrangler/state",
     "build": "wrangler build",
     "check": "wrangler types && tsc --noEmit",
     "types": "wrangler types",
