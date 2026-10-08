@@ -1,28 +1,49 @@
-import { Think, defaultContextOverflowClassifier } from "@cloudflare/think";
+import { Think, Workspace, defaultContextOverflowClassifier } from "@cloudflare/think";
 import type { ContextConfig } from "agents/context";
 import { handleChat } from "./chat";
 import type { ChatBody } from "./schema";
 import { STANDING } from "./system";
-import { createTools } from "./tools";
+import { createBrowserTools } from "@cloudflare/think/tools/browser";
+import { createBashTool } from "@cloudflare/think/tools/workspace";
 
 export class Lyzy extends Think<Env> {
-  maxSteps = 25;
-  contextOverflow = { reactive: true, maxRetries: 1 };
-  classifyChatError = defaultContextOverflowClassifier;
+  override maxSteps = 25;
+  override contextOverflow = { reactive: true, maxRetries: 1 };
+  override classifyChatError = defaultContextOverflowClassifier;
+  override workspace = new Workspace({
+    sql: this.ctx.storage.sql,
+  });
 
   async handleChat(input: ChatBody) {
     return handleChat.call(this, input);
   }
 
-  getModel() {
+  override getModel() {
     return "@cf/moonshotai/kimi-k2.5";
   }
 
-  getTools() {
-    return createTools.call(this);
+  override getTools() {
+    return {
+      ...super.getTools(),
+      bash: createBashTool({
+        ops: {
+          readDir: this.workspace.readDir,
+          readFileBytes: this.workspace.readFileBytes,
+          writeFile: this.workspace.writeFile,
+          mkdir: this.workspace.mkdir,
+          rm: this.workspace.rm,
+          writeFileBytes: this.workspace.writeFileBytes,
+        },
+      }),
+      ...createBrowserTools({
+        ctx: this.ctx,
+        browser: this.env.BROWSER,
+        loader: this.env.LOADER,
+      }),
+    };
   }
 
-  configureContext(): ContextConfig[] {
+  override configureContext(): ContextConfig[] {
     return [
       {
         label: "standing",

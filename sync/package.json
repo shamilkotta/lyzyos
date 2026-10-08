@@ -1,5 +1,5 @@
 {
-  "name": "@lyzyos/sync",
+  "name": "sync",
   "private": true,
   "type": "module",
   "scripts": {
