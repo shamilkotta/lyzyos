@@ -4,6 +4,14 @@ import { user } from "./auth.schema";
 
 export const nodeKinds = ["doc", "note", "comment"] as const;
 export const status = ["in_progress", "complete"] as const;
+export const workspaceStatus = [
+  "not_started",
+  "in_progress",
+  "blocked",
+  "in_review",
+  "complete",
+  "ready",
+] as const;
 
 export const projects = sqliteTable(
   "projects",
@@ -39,7 +47,9 @@ export const workspaces = sqliteTable(
     slug: text("slug").notNull(),
     name: text("name").notNull(),
     kind: text("kind").notNull(),
-    status: text("status", { enum: status }).notNull().default("in_progress"),
+    status: text("status", { enum: workspaceStatus }).notNull().default("in_progress"),
+    statusNote: text("status_note"),
+    attention: text("attention"),
     createdAt: integer("created_at")
       .$defaultFn(() => Date.now())
       .notNull(),

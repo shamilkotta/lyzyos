@@ -9,5 +9,11 @@ export default function ProjectWorkspacePage({
   params: Promise<{ projectId: string; workspaceId: string }>;
 }) {
   const { projectId, workspaceId } = use(params);
-  return <WorkspaceBoard key={`${projectId}:${workspaceId}`} projectId={projectId} workspaceId={workspaceId} />;
+  return (
+    <WorkspaceBoard
+      key={`${projectId}:${workspaceId}`}
+      projectId={projectId}
+      workspaceId={workspaceId}
+    />
+  );
 }

@@ -1,6 +1,6 @@
-import { isRecord } from "@lyzyos/utils";
 import {
   boardEdgeSchema,
+  memberPreviewSchema,
   nodeDtoSchema,
   projectDtoSchema,
   workspaceBoardSchema,
@@ -14,9 +14,12 @@ import { CLIENT_ID_HEADER, getOrCreateClientId } from "./sync-protocol";
 
 const projectDetailSchema = projectDtoSchema.extend({
   workspaces: z.array(workspaceDtoSchema),
+  members: z.array(memberPreviewSchema),
+  projectMemberIds: z.array(z.string()).default([]),
 });
 const workspaceListItemSchema = workspaceDtoSchema.extend({
   project: projectDtoSchema,
+  members: z.array(memberPreviewSchema),
 });
 const createProjectResultSchema = z.object({
   projectId: z.string(),
@@ -36,7 +39,14 @@ function clientHeaders(extra?: HeadersInit): HeadersInit {
 async function parseJson(response: Response) {
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || response.statusText);
+    let message = text || response.statusText;
+    try {
+      const body: unknown = JSON.parse(text);
+      if (typeof body?.error === "string") message = body?.error;
+    } catch {
+      // keep raw text
+    }
+    throw new Error(message);
   }
   if (response.status === 204) return null;
   const body: unknown = await response.json();
@@ -44,7 +54,7 @@ async function parseJson(response: Response) {
 }
 
 function unwrapData(payload: unknown) {
-  if (isRecord(payload) && "data" in payload) return payload.data;
+  if (typeof payload?.data === "object") return payload.data;
   return payload;
 }
 
@@ -75,12 +85,17 @@ export async function listProjectWorkspaces(projectId: string) {
     .array(workspaceListItemSchema)
     .parse(
       unwrapData(
-        await parseJson(await fetch(`/api/projects/${projectId}/workspaces`, { cache: "no-store" })),
+        await parseJson(
+          await fetch(`/api/projects/${projectId}/workspaces`, { cache: "no-store" }),
+        ),
       ),
     );
 }
 
-export async function getWorkspaceBoard(projectId: string, workspaceId: string): Promise<BoardState> {
+export async function getWorkspaceBoard(
+  projectId: string,
+  workspaceId: string,
+): Promise<BoardState> {
   const payload = unwrapData(
     await parseJson(await fetch(workspacePath(projectId, workspaceId), { cache: "no-store" })),
   );
@@ -230,6 +245,128 @@ export async function replyToCommentThread(
     ),
   );
   return { node };
+}
+
+export const memberRoles = ["user", "admin", "agent"] as const;
+export type MemberRole = (typeof memberRoles)[number];
+
+const directoryUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  image: z.string().nullable(),
+  role: z.string().nullable(),
+  createdAt: z.number(),
+});
+export type DirectoryUser = z.infer<typeof directoryUserSchema>;
+
+const directorySchema = z.object({
+  users: z.array(directoryUserSchema),
+});
+export type Directory = z.infer<typeof directorySchema>;
+
+export async function listDirectory() {
+  return directorySchema.parse(
+    unwrapData(await parseJson(await fetch("/api/users", { cache: "no-store" }))),
+  );
+}
+
+const createdMemberSchema = z.object({
+  user: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
+    role: z.string(),
+    setupEmailSent: z.boolean(),
+  }),
+});
+
+export async function createMember(input: { name: string; email: string; role: MemberRole }) {
+  const payload = unwrapData(
+    await parseJson(
+      await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      }),
+    ),
+  );
+  return createdMemberSchema.parse(payload);
+}
+
+export async function updateWorkspace(
+  projectId: string,
+  workspaceId: string,
+  input: { status?: string; statusNote?: string | null; attention?: string | null },
+) {
+  const updated = workspaceDtoSchema.parse(
+    unwrapData(
+      await parseJson(
+        await fetch(workspacePath(projectId, workspaceId), {
+          method: "PATCH",
+          headers: clientHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify(input),
+        }),
+      ),
+    ),
+  );
+  return updated;
+}
+
+const createWorkspaceResultSchema = workspaceDtoSchema.extend({
+  members: z.array(memberPreviewSchema),
+});
+
+export async function createWorkspace(projectId: string, input: { name: string; kind?: string }) {
+  const payload = unwrapData(
+    await parseJson(
+      await fetch(`/api/projects/${projectId}/workspaces`, {
+        method: "POST",
+        headers: clientHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(input),
+      }),
+    ),
+  );
+  return createWorkspaceResultSchema.parse(payload);
+}
+
+const addWorkspaceMembersResultSchema = z.object({
+  members: z.array(memberPreviewSchema),
+});
+
+export async function addWorkspaceMembers(
+  projectId: string,
+  workspaceId: string,
+  userIds: string[],
+) {
+  const payload = unwrapData(
+    await parseJson(
+      await fetch(workspacePath(projectId, workspaceId, "/members"), {
+        method: "POST",
+        headers: clientHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ userIds }),
+      }),
+    ),
+  );
+  return addWorkspaceMembersResultSchema.parse(payload);
+}
+
+const addProjectMembersResultSchema = z.object({
+  members: z.array(memberPreviewSchema),
+  projectMemberIds: z.array(z.string()),
+});
+
+export async function addProjectMembers(projectId: string, userIds: string[]) {
+  const payload = unwrapData(
+    await parseJson(
+      await fetch(`/api/projects/${projectId}/members`, {
+        method: "POST",
+        headers: clientHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ userIds }),
+      }),
+    ),
+  );
+  return addProjectMembersResultSchema.parse(payload);
 }
 
 export type { BoardNode, NodeDto };

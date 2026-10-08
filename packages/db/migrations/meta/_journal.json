@@ -15,6 +15,20 @@
       "when": 1791357055537,
       "tag": "0001_project_members",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791381231585,
+      "tag": "0002_admin_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791381231586,
+      "tag": "0003_workspace_status",
+      "breakpoints": true
     }
   ]
 }

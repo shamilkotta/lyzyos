@@ -2,7 +2,7 @@
 
 import { CirclesFour, DotOutline, SpinnerGap } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { PRODUCT_NAME, attentionQueue, members, getDepartment } from "@/lib/data";
+import { PRODUCT_NAME, attentionQueue, members } from "@/lib/data";
 import { useProjects } from "@/lib/queries/projects";
 import { routes } from "@/lib/routes";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -244,7 +244,7 @@ export function KnowledgeSurface() {
 
   return (
     <div className="mx-auto max-w-4xl px-8 py-12 fade-up">
-      <h1 className="font-serif text-[32px] tracking-[-0.03em] text-ink">Knowledge</h1>
+      <h1 className="text-[28px] font-medium tracking-[-0.03em] text-ink">Knowledge</h1>
       <p className="mt-2 text-[14px] text-ink-secondary">
         Sources agents read before they generate, check, or localize.
       </p>
@@ -271,45 +271,10 @@ export function KnowledgeSurface() {
   );
 }
 
-export function AgentsSurface() {
-  return (
-    <div className="mx-auto max-w-3xl px-8 py-12 fade-up">
-      <h1 className="font-serif text-[32px] tracking-[-0.03em] text-ink">Team</h1>
-      <p className="mt-2 text-[14px] text-ink-secondary">
-        Teammates share the same rooms and board objects.
-      </p>
-      <ul className="mt-8 rounded-[12px] border border-border bg-surface">
-        {members.map((member) => (
-          <li
-            key={member.id}
-            className="flex items-start justify-between gap-4 border-b border-border px-4 py-4 last:border-0"
-          >
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-canvas text-[11px] font-medium text-ink">
-                {member.initials}
-              </span>
-              <div>
-                <p className="text-[14px] font-medium text-ink">{member.name}</p>
-                <p className="mt-0.5 text-[12px] text-ink-secondary">{member.role}</p>
-                <p className="mt-2 text-[12px] text-ink-tertiary">
-                  {member.departmentIds.map((id) => getDepartment(id).name).join(" · ")}
-                </p>
-              </div>
-            </div>
-            <StatusBadge tone={member.status === "working" ? "ok" : "neutral"}>
-              {member.status}
-            </StatusBadge>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 export function SettingsSurface() {
   return (
     <div className="mx-auto max-w-xl px-8 py-12 fade-up">
-      <h1 className="font-serif text-[32px] tracking-[-0.03em] text-ink">Settings</h1>
+      <h1 className="text-[28px] font-medium tracking-[-0.03em] text-ink">Settings</h1>
       <p className="mt-2 text-[14px] text-ink-secondary">
         Workspace defaults. Kept quiet on purpose.
       </p>

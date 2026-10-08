@@ -1,4 +1,17 @@
-import { and, asc, desc, eq, exists, or, type InferInsertModel, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  inArray,
+  or,
+  type InferInsertModel,
+  type SQL,
+  type InferSelectModel,
+} from "drizzle-orm";
+import { AGENT_ROLE, resolveAuthorKind } from "./constants";
+import { user } from "./auth.schema";
 import { createDb, type Db } from "./client";
 import {
   comments,
@@ -26,6 +39,7 @@ const userPreview = {
     id: true,
     name: true,
     image: true,
+    role: true,
   },
 } as const;
 
@@ -47,6 +61,8 @@ const workspaceColumns = {
   name: workspaces.name,
   kind: workspaces.kind,
   status: workspaces.status,
+  statusNote: workspaces.statusNote,
+  attention: workspaces.attention,
   createdAt: workspaces.createdAt,
   updatedAt: workspaces.updatedAt,
 };
@@ -140,14 +156,20 @@ function nodeInsertValues(
   };
 }
 
-function mergeMemberPreviews(groups: ReadonlyArray<ReadonlyArray<{ user: MemberPreview }>>) {
+type RosterUser = { id: string; name: string; image?: string | null; role?: string | null };
+
+function toMemberPreview(u: RosterUser): MemberPreview {
+  return { id: u.id, name: u.name, image: u.image ?? null, kind: resolveAuthorKind(u.role) };
+}
+
+function mergeMemberPreviews(groups: ReadonlyArray<ReadonlyArray<{ user: RosterUser }>>) {
   const members: MemberPreview[] = [];
   const seen = new Set<string>();
   for (const group of groups) {
     for (const member of group) {
       if (seen.has(member.user.id)) continue;
       seen.add(member.user.id);
-      members.push(member.user);
+      members.push(toMemberPreview(member.user));
     }
   }
   return members;
@@ -219,6 +241,15 @@ export async function listWorkspaces(d1: D1Database, projectId: string) {
   });
 }
 
+export async function updateProjectName(d1: D1Database, projectId: string, name: string) {
+  const [row] = await db(d1)
+    .update(projects)
+    .set({ name: name.trim().slice(0, 80), updatedAt: Date.now() })
+    .where(eq(projects.id, projectId))
+    .returning();
+  return row ? rowToProject(row) : null;
+}
+
 export async function listAccessibleWorkspaces(
   d1: D1Database,
   args: { projectId: string; userId: string },
@@ -256,18 +287,18 @@ export async function listWorkspaceEdges(d1: D1Database, workspaceId: string) {
   return rows.map(rowToEdge);
 }
 
-export async function listWorkspaceNodes(d1: D1Database, workspaceId: string, agentId: string) {
+export async function listWorkspaceNodes(d1: D1Database, workspaceId: string) {
   const rows = await db(d1).query.nodes.findMany({
     where: eq(nodes.workspaceId, workspaceId),
     with: nodeWithRelations,
     orderBy: [asc(nodes.createdAt)],
   });
-  return rows.map((row) => rowToNode(row, agentId));
+  return rows.map((row) => rowToNode(row));
 }
 
-async function boardPayload(d1: D1Database, workspace: WorkspaceForBoard, agentId: string) {
+async function boardPayload(d1: D1Database, workspace: WorkspaceForBoard) {
   const [nodes, edges] = await Promise.all([
-    listWorkspaceNodes(d1, workspace.id, agentId),
+    listWorkspaceNodes(d1, workspace.id),
     listWorkspaceEdges(d1, workspace.id),
   ]);
 
@@ -279,18 +310,18 @@ async function boardPayload(d1: D1Database, workspace: WorkspaceForBoard, agentI
   };
 }
 
-export async function loadBoard(d1: D1Database, workspaceId: string, agentId: string) {
+export async function loadBoard(d1: D1Database, workspaceId: string) {
   const workspace = await db(d1).query.workspaces.findFirst({
     where: eq(workspaces.id, workspaceId),
     with: { project: true },
   });
   if (!workspace?.project) return null;
-  return boardPayload(d1, workspace, agentId);
+  return boardPayload(d1, workspace);
 }
 
 export async function loadAccessibleBoard(
   d1: D1Database,
-  args: { projectId: string; workspaceId: string; userId: string; agentId: string },
+  args: { projectId: string; workspaceId: string; userId: string },
 ) {
   const workspace = await getProjectWorkspaceByIdOrSlug(d1, args.workspaceId, {
     projectId: args.projectId,
@@ -298,12 +329,12 @@ export async function loadAccessibleBoard(
   });
   if (!workspace) return null;
 
-  const board = await boardPayload(d1, workspace, args.agentId);
-  const members = await getWorkspaceMembers(d1, {
+  const board = await boardPayload(d1, workspace);
+  const members = await getWorkspaceRoster(d1, {
     projectId: workspace.project.id,
     workspaceId: workspace.id,
   });
-  return { ...board, members, agentId: args.agentId };
+  return { ...board, members };
 }
 
 export async function getProjectWorkspaceByIdOrSlug(
@@ -324,6 +355,151 @@ export async function getWorkspaceForUser(d1: D1Database, workspaceId: string, u
 
 export async function touchProject(d1: D1Database, projectId: string) {
   return db(d1).update(projects).set({ updatedAt: Date.now() }).where(eq(projects.id, projectId));
+}
+
+export async function createWorkspace(
+  d1: D1Database,
+  input: Pick<InferInsertModel<typeof workspaces>, "projectId" | "name" | "kind"> & {
+    slug: string;
+  },
+) {
+  const [row] = await db(d1)
+    .insert(workspaces)
+    .values({
+      projectId: input.projectId,
+      slug: input.slug,
+      name: input.name,
+      kind: input.kind,
+    })
+    .returning();
+  return row ?? null;
+}
+
+export async function updateWorkspaceStatus(
+  d1: D1Database,
+  workspaceId: string,
+  input: Partial<Pick<InferSelectModel<typeof workspaces>, "status" | "statusNote" | "attention">>,
+) {
+  const [row] = await db(d1)
+    .update(workspaces)
+    .set({ ...input, updatedAt: Date.now() })
+    .where(eq(workspaces.id, workspaceId))
+    .returning();
+  return row ? rowToWorkspace(row) : null;
+}
+
+/** Owner or project_members row — not workspace-only membership. */
+export async function userHasProjectAccess(
+  d1: D1Database,
+  args: { projectId: string; userId: string },
+) {
+  const database = db(d1);
+  const [row] = await database
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.id, args.projectId), hasProjectAccess(database, args.userId)))
+    .limit(1);
+  return Boolean(row);
+}
+
+export async function addMemberToWorkspace(
+  d1: D1Database,
+  args: { workspaceId: string; userId: string },
+) {
+  const added = await addMembersToWorkspace(d1, {
+    workspaceId: args.workspaceId,
+    userIds: [args.userId],
+  });
+  return added[0] ?? null;
+}
+
+export async function addMembersToWorkspace(
+  d1: D1Database,
+  args: { workspaceId: string; userIds: string[] },
+) {
+  const uniqueIds = [...new Set(args.userIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return [];
+
+  const database = db(d1);
+  const [existing, validUsers] = await Promise.all([
+    database.query.workspaceMembers.findMany({
+      where: and(
+        eq(workspaceMembers.workspaceId, args.workspaceId),
+        inArray(workspaceMembers.userId, uniqueIds),
+      ),
+      columns: { userId: true },
+    }),
+    database.query.user.findMany({
+      where: inArray(user.id, uniqueIds),
+      columns: { id: true },
+    }),
+  ]);
+
+  const existingSet = new Set(existing.map((row) => row.userId));
+  const toAdd = validUsers.map((u) => u.id).filter((id) => !existingSet.has(id));
+  if (toAdd.length === 0) return [];
+
+  return database
+    .insert(workspaceMembers)
+    .values(toAdd.map((userId) => ({ workspaceId: args.workspaceId, userId })))
+    .returning();
+}
+
+export async function getProjectMemberIds(d1: D1Database, projectId: string) {
+  const database = db(d1);
+  const [project, memberRows] = await Promise.all([
+    database.query.projects.findFirst({
+      where: eq(projects.id, projectId),
+      columns: { ownerId: true },
+    }),
+    database.query.projectMembers.findMany({
+      where: eq(projectMembers.projectId, projectId),
+      columns: { userId: true },
+    }),
+  ]);
+
+  const ids = new Set(memberRows.map((row) => row.userId));
+  if (project?.ownerId) ids.add(project.ownerId);
+  return [...ids];
+}
+
+export async function addMembersToProject(
+  d1: D1Database,
+  args: { projectId: string; userIds: string[] },
+) {
+  const uniqueIds = [...new Set(args.userIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return [];
+
+  const database = db(d1);
+  const [project, existing, validUsers] = await Promise.all([
+    database.query.projects.findFirst({
+      where: eq(projects.id, args.projectId),
+      columns: { ownerId: true },
+    }),
+    database.query.projectMembers.findMany({
+      where: and(
+        eq(projectMembers.projectId, args.projectId),
+        inArray(projectMembers.userId, uniqueIds),
+      ),
+      columns: { userId: true },
+    }),
+    database.query.user.findMany({
+      where: inArray(user.id, uniqueIds),
+      columns: { id: true },
+    }),
+  ]);
+
+  if (!project) return [];
+
+  const existingSet = new Set(existing.map((row) => row.userId));
+  existingSet.add(project.ownerId);
+  const toAdd = validUsers.map((u) => u.id).filter((id) => !existingSet.has(id));
+  if (toAdd.length === 0) return [];
+
+  return database
+    .insert(projectMembers)
+    .values(toAdd.map((userId) => ({ projectId: args.projectId, userId })))
+    .returning();
 }
 
 export async function createCommentNode(
@@ -446,9 +622,9 @@ export async function getNodeWithRelations(d1: D1Database, nodeId: string) {
   });
 }
 
-export async function getNodeDto(d1: D1Database, nodeId: string, agentId: string) {
+export async function getNodeDto(d1: D1Database, nodeId: string) {
   const node = await getNodeWithRelations(d1, nodeId);
-  return node ? rowToNode(node, agentId) : null;
+  return node ? rowToNode(node) : null;
 }
 
 export async function getWorkspaceMembers(
@@ -468,6 +644,46 @@ export async function getWorkspaceMembers(
   ]);
 
   return mergeMemberPreviews([workspaceMemberRows, projectMemberRows]);
+}
+
+async function getAgentMembers(d1: D1Database): Promise<MemberPreview[]> {
+  const rows = await db(d1).query.user.findMany({
+    where: eq(user.role, AGENT_ROLE),
+    columns: userPreview.columns,
+  });
+  return rows.map(toMemberPreview);
+}
+
+function withAgentsFirst(agents: MemberPreview[], members: MemberPreview[]) {
+  const agentIds = new Set(agents.map((a) => a.id));
+  return [...agents, ...members.filter((m) => !agentIds.has(m.id))];
+}
+
+export async function getWorkspaceRoster(
+  d1: D1Database,
+  args: { projectId: string; workspaceId: string },
+) {
+  const [agents, members] = await Promise.all([getAgentMembers(d1), getWorkspaceMembers(d1, args)]);
+  return withAgentsFirst(agents, members);
+}
+
+export async function getProjectRoster(d1: D1Database, args: { projectId: string }) {
+  const database = db(d1);
+  const [agents, projectMemberRows, workspaceMemberRows] = await Promise.all([
+    getAgentMembers(d1),
+    database.query.projectMembers.findMany({
+      where: eq(projectMembers.projectId, args.projectId),
+      with: { user: userPreview },
+    }),
+    database
+      .select({ user: { id: user.id, name: user.name, image: user.image, role: user.role } })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .innerJoin(user, eq(user.id, workspaceMembers.userId))
+      .where(eq(workspaces.projectId, args.projectId)),
+  ]);
+  const members = mergeMemberPreviews([projectMemberRows, workspaceMemberRows]);
+  return withAgentsFirst(agents, members);
 }
 
 export async function addCommentToThread(
@@ -529,4 +745,19 @@ export async function updateNode(
   }
 
   return updatedNode;
+}
+
+export async function updateReplyComment(
+  d1: D1Database,
+  args: { replyId: string; message: string; userId: string },
+) {
+  const database = db(d1);
+  const [updatedComment] = await database
+    .update(comments)
+    .set({
+      data: args.message,
+    })
+    .where(and(eq(comments.id, args.replyId), eq(comments.userId, args.userId)))
+    .returning();
+  return updatedComment;
 }

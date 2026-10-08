@@ -1,6 +1,7 @@
 import { nextCookies } from "better-auth/next-js";
 import { createAuth } from "@lyzyos/auth/server";
 import { getEnv, getExecutionContext } from "./env";
+import { makeEmailSender } from "./email";
 
 export async function getAuth() {
   const env = await getEnv();
@@ -19,6 +20,7 @@ export async function getAuth() {
     },
     {
       plugins: [nextCookies()],
+      sendEmail: makeEmailSender(env.EMAIL),
       waitUntil: ctx ? (promise) => ctx.waitUntil(promise) : undefined,
     },
   );

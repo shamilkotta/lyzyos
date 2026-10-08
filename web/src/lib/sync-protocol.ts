@@ -41,6 +41,11 @@ export function applySyncEvent(board: BoardState, event: SyncEvent) {
         projectName: event.project.name,
         status: event.project.status,
       };
+    case "workspace.updated":
+      return {
+        ...board,
+        workspace: { ...board.workspace, ...event.workspace },
+      };
     case "node.upserted": {
       const idx = board.nodes.findIndex((n) => n.id === event.node.id);
       if (idx === -1) return { ...board, nodes: [...board.nodes, event.node] };

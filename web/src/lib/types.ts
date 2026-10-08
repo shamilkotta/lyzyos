@@ -109,7 +109,15 @@ export type InspectorSelection =
       subtitle?: string;
       departmentId: DepartmentId;
     }
-  | { type: "member"; member: Member }
+  | {
+      type: "workspace";
+      id: string;
+      name: string;
+      summary: string;
+      status: WorkStatus;
+      members: Member[];
+    }
+  | { type: "member"; member: Member; activeIn?: string[] }
   | { type: "attention"; item: AttentionItem };
 
 export function isDepartmentId(value: string): value is DepartmentId {

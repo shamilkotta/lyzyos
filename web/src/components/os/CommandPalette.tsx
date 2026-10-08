@@ -7,7 +7,7 @@ import {
   FilePlus,
   SquaresFour,
   WarningCircle,
-  Robot,
+  Users,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 
@@ -62,10 +62,10 @@ export function CommandPalette({
         action: onFocusAttention,
       },
       {
-        id: "agents",
-        label: "Inspect active agents",
-        hint: "Agents",
-        icon: Robot,
+        id: "members",
+        label: "Open members directory",
+        hint: "Members",
+        icon: Users,
         action: onShowAgents,
       },
     ],
@@ -115,7 +115,7 @@ export function CommandPalette({
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search spaces, agents, or run a command…"
+            placeholder="Search spaces, members, or run a command…"
             className="h-12 w-full bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-tertiary"
           />
           <kbd>esc</kbd>

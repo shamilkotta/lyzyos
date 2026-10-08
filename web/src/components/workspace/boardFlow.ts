@@ -2,7 +2,7 @@ import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { BoardNodeData, WorkspaceCardData } from "@/components/canvas/nodes/CanvasNodes";
 import type { Member } from "@/lib/types";
 import { documentFileUrl, isCommentNode, type BoardNode } from "@/lib/project-types";
-import { resolveAuthorKind, type CommentOpenAudience } from "@lyzyos/db";
+import type { CommentOpenAudience, MemberPreview } from "@lyzyos/db";
 
 export function boardKindLabel(kind: BoardNode["kind"]) {
   switch (kind) {
@@ -91,8 +91,9 @@ function titleFor(node: BoardNode) {
   }
 }
 
+/** Cards render markdown clipped by height, so this only bounds render cost. */
 function clip(body: string) {
-  return body.length > 140 ? `${body.slice(0, 140)}…` : body;
+  return body.length > 600 ? body.slice(0, 600) : body;
 }
 
 function summaryFor(node: BoardNode) {
@@ -124,7 +125,7 @@ export function memberFromAuthor(
   return {
     id: opts?.id ?? `${authorKind}:${authorName.trim().toLowerCase()}`,
     name: authorName,
-    role: "Collaborator",
+    role: authorKind === "agent" ? "Project agent" : "Member",
     kind: authorKind,
     initials,
     status: opts?.status ?? "online",
@@ -133,23 +134,27 @@ export function memberFromAuthor(
   } satisfies Member;
 }
 
-export function membersFromWorkspace(
-  authors: Array<{ id: string; name: string; image?: string | null }>,
-  onlineNames: Set<string> = new Set(),
-  agentId: string,
-) {
+type MemberInput = Pick<MemberPreview, "id" | "name"> & {
+  image?: string | null;
+  kind?: MemberPreview["kind"];
+};
+
+export function membersFromWorkspace(authors: MemberInput[], onlineNames: Set<string> = new Set()) {
   const byId = new Map<string, Member>();
   for (const author of authors) {
     if (!author.id || byId.has(author.id)) continue;
-    const kind = resolveAuthorKind({ id: author.id, agentId });
+    const kind = author.kind ?? "human";
+    // The agent is always on duty; humans are online when they have a live sync connection.
     const online =
-      onlineNames.has(author.name) || [...onlineNames].some((n) => handlesMatch(n, author.name));
+      kind === "agent" ||
+      onlineNames.has(author.name) ||
+      [...onlineNames].some((n) => handlesMatch(n, author.name));
     byId.set(
       author.id,
       memberFromAuthor(kind, author.name, {
         id: author.id,
         image: author.image,
-        status: online ? "online" : "away",
+        status: kind === "agent" ? "working" : online ? "online" : "away",
       }),
     );
   }

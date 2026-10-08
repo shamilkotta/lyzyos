@@ -59,7 +59,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   await touchProject(env.DB, projectId);
 
-  const node = await getNodeDto(env.DB, nodeId, env.AGENT_ID);
+  const node = await getNodeDto(env.DB, nodeId);
   if (node) {
     await publishNodeUpserted(env, workspace.id, node, clientIdFromRequest(request));
   }

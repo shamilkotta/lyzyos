@@ -10,15 +10,15 @@ export const routes = {
     `/projects/${projectId}/workspaces/${workspaceId}`,
   space: (spaceId: string) => `/spaces/${spaceId}`,
   knowledge: "/knowledge",
-  agents: "/agents",
+  members: "/members",
   settings: "/settings",
 } as const;
 
-export type RailId = "home" | "spaces" | "knowledge" | "agents" | "settings";
+export type RailId = "home" | "spaces" | "knowledge" | "members" | "settings";
 
 export function railFromPathname(pathname: string): RailId {
   if (pathname.startsWith("/knowledge")) return "knowledge";
-  if (pathname.startsWith("/agents")) return "agents";
+  if (pathname.startsWith("/members")) return "members";
   if (pathname.startsWith("/settings")) return "settings";
   if (pathname.startsWith("/projects/") || pathname.startsWith("/spaces/")) return "spaces";
   if (pathname === "/projects" || pathname === "/") return "home";
@@ -33,8 +33,8 @@ export function routeForRail(rail: RailId): string {
       return routes.space("secureedge");
     case "knowledge":
       return routes.knowledge;
-    case "agents":
-      return routes.agents;
+    case "members":
+      return routes.members;
     case "settings":
       return routes.settings;
   }

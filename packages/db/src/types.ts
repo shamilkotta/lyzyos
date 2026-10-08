@@ -9,7 +9,7 @@ import type {
   projects,
   workspaces,
 } from "./project.schema";
-import { nodeKinds, status } from "./project.schema";
+import { nodeKinds, status, workspaceStatus } from "./project.schema";
 import {
   authorKindSchema,
   commentOpenAudienceSchema,
@@ -25,6 +25,7 @@ import { resolveAuthorKind } from "./constants";
 export type { AuthorKind, CommentOpenAudience, CommentReply, CommentStatus };
 export type NodeKind = (typeof nodeKinds)[number];
 export type Status = (typeof status)[number];
+export type WorkspaceStatus = (typeof workspaceStatus)[number];
 
 export type ProjectRow = InferSelectModel<typeof projects>;
 export type WorkspaceRow = InferSelectModel<typeof workspaces>;
@@ -40,6 +41,7 @@ export const nodeAuthorSchema = z.object({
   id: z.string(),
   name: z.string(),
   image: z.string().nullable().optional(),
+  role: z.string().nullable().optional(),
 });
 export type NodeAuthor = z.infer<typeof nodeAuthorSchema>;
 
@@ -103,7 +105,9 @@ export const workspaceDtoSchema = z.object({
   slug: z.string(),
   name: z.string(),
   kind: z.string(),
-  status: z.enum(status).optional(),
+  status: z.enum(workspaceStatus).optional(),
+  statusNote: z.string().nullable().optional(),
+  attention: z.string().nullable().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
@@ -120,6 +124,7 @@ export const memberPreviewSchema = z.object({
   id: z.string(),
   name: z.string(),
   image: z.string().nullable().optional(),
+  kind: authorKindSchema.default("human"),
 });
 export type MemberPreview = z.infer<typeof memberPreviewSchema>;
 
@@ -128,6 +133,8 @@ export type WorkspaceForBoard = Pick<
   "id" | "projectId" | "slug" | "name" | "kind" | "createdAt" | "updatedAt"
 > & {
   status?: WorkspaceRow["status"];
+  statusNote?: WorkspaceRow["statusNote"];
+  attention?: WorkspaceRow["attention"];
   project: ProjectRow;
 };
 
@@ -196,13 +203,13 @@ export function previewKindFromMime(mime: string | null | undefined, name = "") 
   return "file";
 }
 
-function nodeBase(row: NodeWithRelations, agentId: string) {
+function nodeBase(row: NodeWithRelations) {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
     title: row.title,
     authorId: row.authorId,
-    authorKind: resolveAuthorKind({ id: row.authorId, agentId }),
+    authorKind: resolveAuthorKind(row.author.role),
     authorName: row.author.name,
     x: row.x,
     y: row.y,
@@ -215,8 +222,8 @@ function commentStatusFromRow(status: string | null) {
   return commentStatusSchema.safeParse(status).data ?? null;
 }
 
-export function rowToNode(row: NodeWithRelations, agentId: string) {
-  const base = nodeBase(row, agentId);
+export function rowToNode(row: NodeWithRelations) {
+  const base = nodeBase(row);
 
   switch (row.kind) {
     case "comment": {
@@ -228,7 +235,7 @@ export function rowToNode(row: NodeWithRelations, agentId: string) {
         body: root?.data ?? "",
         replies: rest.map((c) => ({
           id: c.id,
-          authorKind: resolveAuthorKind({ id: c.userId, agentId }),
+          authorKind: resolveAuthorKind(c.user.role),
           authorName: c.user.name,
           body: c.data,
           createdAt: c.createdAt,
@@ -275,8 +282,13 @@ export function rowToProject(row: ProjectRow) {
 }
 
 export function rowToWorkspace(
-  row: Pick<WorkspaceRow, "id" | "projectId" | "slug" | "name" | "kind" | "createdAt" | "updatedAt"> & {
+  row: Pick<
+    WorkspaceRow,
+    "id" | "projectId" | "slug" | "name" | "kind" | "createdAt" | "updatedAt"
+  > & {
     status?: WorkspaceRow["status"];
+    statusNote?: WorkspaceRow["statusNote"];
+    attention?: WorkspaceRow["attention"];
   },
 ) {
   return {
@@ -286,6 +298,8 @@ export function rowToWorkspace(
     name: row.name,
     kind: row.kind,
     status: row.status,
+    statusNote: row.statusNote ?? null,
+    attention: row.attention ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
