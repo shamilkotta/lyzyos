@@ -24,6 +24,7 @@ export function baseAuthOptions(sendEmail: EmailSender = consoleSender): BetterA
     appName: "Lyzy",
     emailAndPassword: {
       enabled: true,
+      disableSignUp: true,
       minPasswordLength: 8,
       revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url }) => {

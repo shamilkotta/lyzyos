@@ -1,6 +1,5 @@
 export {
   signIn,
-  signUp,
   signOut,
   useSession,
   requestPasswordReset,
