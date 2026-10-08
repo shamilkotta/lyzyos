@@ -6,7 +6,7 @@ import { MenuBar } from "./MenuBar";
 import { SpaceRail } from "./SpaceRail";
 import { CommandPalette } from "./CommandPalette";
 import { AttentionTray } from "./AttentionTray";
-import { attentionQueue, spaces } from "@/lib/data";
+import { attentionQueue } from "@/lib/data";
 import { useProjects, useProjectBoard } from "@/lib/queries/projects";
 import { railFromPathname, routeForRail, routes, type RailId } from "@/lib/routes";
 
@@ -28,11 +28,6 @@ function workspaceIdFromPathname(pathname: string): string | null {
   return match?.[1] ?? null;
 }
 
-function spaceIdFromPathname(pathname: string): string | null {
-  const match = pathname.match(/^\/spaces\/([^/]+)/);
-  return match?.[1] ?? null;
-}
-
 export function OsShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -40,7 +35,6 @@ export function OsShell({ children }: { children: ReactNode }) {
   const rail = railFromPathname(pathname);
   const activeProjectId = projectIdFromPathname(pathname);
   const activeWorkspaceId = workspaceIdFromPathname(pathname);
-  const activeSpaceId = spaceIdFromPathname(pathname);
 
   const [commandOpen, setCommandOpen] = useState(false);
   const [attentionOpen, setAttentionOpen] = useState(false);
@@ -62,10 +56,6 @@ export function OsShell({ children }: { children: ReactNode }) {
 
   const activeProjectName = liveProjects.find((p) => p.id === activeProjectId)?.name ?? "";
   const activeWorkspaceName = workspaceBoard?.workspace.name;
-  const spaceName = activeSpaceId
-    ? (spaces.find((s) => s.id === activeSpaceId)?.name ?? activeSpaceId)
-    : undefined;
-
   const focusKickoff = useCallback(() => {
     router.push(routes.projects);
   }, [router]);
@@ -77,12 +67,8 @@ export function OsShell({ children }: { children: ReactNode }) {
   const backToProjectGraph = useCallback(() => {
     if (activeProjectId) {
       router.push(routes.project(activeProjectId));
-      return;
     }
-    if (activeSpaceId) {
-      router.push(routes.space(activeSpaceId));
-    }
-  }, [activeProjectId, activeSpaceId, router]);
+  }, [activeProjectId, router]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -106,13 +92,7 @@ export function OsShell({ children }: { children: ReactNode }) {
     <div className="os-grain flex h-dvh flex-col bg-canvas text-ink">
       <MenuBar
         view={view}
-        spaceName={
-          activeProjectId
-            ? activeProjectName || undefined
-            : view === "campaign"
-              ? spaceName
-              : undefined
-        }
+        spaceName={activeProjectId ? activeProjectName || undefined : undefined}
         workspaceName={activeWorkspaceName}
         onHome={goHome}
         onCommand={() => setCommandOpen(true)}

@@ -1,8 +1,8 @@
 "use client";
 
-import { CirclesFour, DotOutline, SpinnerGap } from "@phosphor-icons/react";
+import { CirclesFour, DotOutline, SpinnerGap, ArrowRight, Clock } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { PRODUCT_NAME, attentionQueue, members } from "@/lib/data";
+import { PRODUCT_NAME } from "@/lib/data";
 import { useProjects } from "@/lib/queries/projects";
 import { routes } from "@/lib/routes";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -138,68 +138,93 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
           </section>
         ) : null}
 
-        <section className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
-          <div>
-            <h2 className="mb-3 text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-              Waiting on you
-            </h2>
-            <ul className="rounded-[12px] border border-border bg-surface">
-              {attentionQueue.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-start justify-between gap-3 border-b border-border px-4 py-3 last:border-0"
-                >
-                  <div>
-                    <p className="text-[13px] font-medium text-ink">{item.title}</p>
-                    <p className="mt-0.5 text-[12px] text-ink-secondary">
-                      {item.campaignName} · {item.reason}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => router.push(routes.space(item.campaignId))}
-                    className="shrink-0 text-[12px] font-medium text-ink underline-offset-2 hover:underline"
-                  >
-                    Open
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h2 className="mb-3 text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-              Team on campaigns
-            </h2>
-            <ul className="rounded-[12px] border border-border bg-surface">
-              {members
-                .filter((m) => m.status !== "away")
-                .slice(0, 6)
-                .map((member) => (
-                  <li
-                    key={member.id}
-                    className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 last:border-0"
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-canvas text-[9px] font-medium text-ink">
-                        {member.initials}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-medium text-ink">{member.name}</p>
-                        <p className="truncate text-[12px] text-ink-secondary">{member.role}</p>
+        {!isLoading && liveProjects.length > 0 ? (
+          <section className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
+            <div>
+              <h2 className="mb-3 text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
+                All projects
+              </h2>
+              <ul className="rounded-[12px] border border-border bg-surface">
+                {liveProjects.slice(0, 8).map((project) => (
+                  <li key={project.id} className="border-b border-border last:border-0">
+                    <button
+                      type="button"
+                      onClick={() => router.push(routes.project(project.id))}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-soft"
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <CirclesFour size={14} className="shrink-0 text-ink-tertiary" weight="bold" />
+                        <span className="truncate text-[13px] font-medium text-ink">{project.name}</span>
                       </div>
-                    </div>
-                    <span
-                      className={clsx(
-                        "h-1.5 w-1.5 shrink-0 rounded-full",
-                        member.status === "working" ? "bg-pale-green-ink" : "bg-ink-tertiary",
-                      )}
-                    />
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="flex items-center gap-1 text-[11px] text-ink-tertiary">
+                          <Clock size={11} />
+                          {formatRelative(project.updatedAt)}
+                        </span>
+                        <StatusBadge tone={project.status === "in_progress" ? "info" : "ok"}>
+                          {project.status === "in_progress" ? "In progress" : "Complete"}
+                        </StatusBadge>
+                        <ArrowRight size={12} className="text-ink-tertiary opacity-0 transition-opacity group-hover:opacity-100" />
+                      </div>
+                    </button>
                   </li>
                 ))}
-            </ul>
-          </div>
-        </section>
+              </ul>
+              {liveProjects.length > 8 ? (
+                <p className="mt-2 text-center text-[12px] text-ink-tertiary">
+                  +{liveProjects.length - 8} more projects
+                </p>
+              ) : null}
+            </div>
+
+            <div>
+              <h2 className="mb-3 text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
+                Overview
+              </h2>
+              <div className="rounded-[12px] border border-border bg-surface p-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-ink-secondary">Total projects</span>
+                    <span className="font-mono text-[20px] font-semibold text-ink">{liveProjects.length}</span>
+                  </div>
+                  <div className="h-px bg-border" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-ink-secondary">In progress</span>
+                    <span className="font-mono text-[20px] font-semibold text-ink">
+                      {liveProjects.filter((p) => p.status === "in_progress").length}
+                    </span>
+                  </div>
+                  <div className="h-px bg-border" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-ink-secondary">Complete</span>
+                    <span className="font-mono text-[20px] font-semibold text-ink">
+                      {liveProjects.filter((p) => p.status !== "in_progress").length}
+                    </span>
+                  </div>
+                </div>
+
+                {liveProjects.length > 0 ? (
+                  <div className="mt-4">
+                    <div className="mb-1.5 flex justify-between text-[11px] text-ink-tertiary">
+                      <span>Progress</span>
+                      <span>
+                        {Math.round((liveProjects.filter((p) => p.status !== "in_progress").length / liveProjects.length) * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-canvas">
+                      <div
+                        className="h-full rounded-full bg-ink transition-all duration-500"
+                        style={{
+                          width: `${Math.round((liveProjects.filter((p) => p.status !== "in_progress").length / liveProjects.length) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   );
