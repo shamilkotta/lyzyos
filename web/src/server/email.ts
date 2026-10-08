@@ -1,7 +1,7 @@
 import "server-only";
 import type { EmailSender } from "@lyzyos/auth";
 
-const FROM_ADDRESS = "lyzyos@shamilkotta.com";
+const FROM_ADDRESS = "lyzyos@shamilkotta.me";
 const FROM_NAME = "LyzyOS";
 
 export function makeEmailSender(binding: SendEmail | undefined): EmailSender | undefined {
