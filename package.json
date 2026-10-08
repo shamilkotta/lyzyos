@@ -4,14 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --parallel --filter web --filter api run dev",
+    "dev": "pnpm --parallel --filter web --filter sync run dev",
     "lint": "pnpm -r --if-present lint",
     "lint:fix": "pnpm -r --if-present lint -- --fix",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "web": "pnpm --filter web",
     "agent": "pnpm --filter agent",
-    "api": "pnpm --filter api",
+    "sync": "pnpm --filter sync",
     "db": "pnpm --filter @lyzyos/db",
     "utils": "pnpm --filter @lyzyos/utils"
   },

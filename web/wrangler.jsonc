@@ -7,6 +7,7 @@
   "vars": {
     "BETTER_AUTH_URL": "http://localhost:3000",
     "WEB_ORIGIN": "http://localhost:3000",
+    "INTERNAL_SECRET": "dev-secret-change-in-prod",
   },
   "services": [
     {
@@ -38,7 +39,7 @@
       {
         "name": "WORKSPACE_SYNC",
         "class_name": "WorkspaceSync",
-        "script_name": "lyzy-api",
+        "script_name": "lyzy-sync",
       },
     ],
   },

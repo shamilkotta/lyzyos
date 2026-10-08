@@ -1,5 +1,5 @@
 {
-  "name": "@lyzyos/api",
+  "name": "@lyzyos/sync",
   "private": true,
   "type": "module",
   "scripts": {

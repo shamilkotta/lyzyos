@@ -15,6 +15,7 @@
   },
   "vars": {
     "AGENT_ID": "123-321",
+    "INTERNAL_SECRET": "dev-secret-change-in-prod",
   },
   "ai": {
     "binding": "AI",
@@ -40,7 +41,7 @@
       {
         "name": "WORKSPACE_SYNC",
         "class_name": "WorkspaceSync",
-        "script_name": "lyzy-api",
+        "script_name": "lyzy-sync",
       },
     ],
   },
