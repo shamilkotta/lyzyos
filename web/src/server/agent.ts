@@ -10,7 +10,10 @@ export function notifyAgent(env: AppEnv, body: Record<string, unknown>) {
     .fetch(
       new Request("https://agent/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Internal-Secret": env.INTERNAL_SECRET,
+        },
         body: JSON.stringify(body),
       }),
     )

@@ -19,19 +19,12 @@ async function handleAgentTrigger(request: Request, env: Env, ctx: ExecutionCont
   const url = new URL(request.url);
   if (url.pathname !== "/chat") return null;
 
-  if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    });
-  }
-
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  if (request.headers.get("X-Internal-Secret") !== env.INTERNAL_SECRET) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const [body, error] = await tryCatch(request.json());

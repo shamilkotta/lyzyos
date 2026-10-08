@@ -8,7 +8,8 @@ interface __BaseEnv_CloudflareEnv {
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   WEB_ORIGIN: string;
-  WORKSPACE_SYNC: DurableObjectNamespace /* WorkspaceSync from lyzy-api */;
+  INTERNAL_SECRET: string;
+  WORKSPACE_SYNC: DurableObjectNamespace /* WorkspaceSync from lyzy-sync */;
   AGENT: Fetcher /* lyzy */;
 }
 declare namespace Cloudflare {
