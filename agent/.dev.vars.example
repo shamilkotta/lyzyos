@@ -1,0 +1,2 @@
+INTERNAL_SECRET=dev-secret-change-in-prod
+AGENT_ID=123

@@ -11,8 +11,8 @@
     "port": 8788,
   },
   "vars": {
-    "BETTER_AUTH_URL": "http://localhost:3000",
-    "WEB_ORIGIN": "http://localhost:3000",
+    "BETTER_AUTH_URL": "https://lyzyos.shamilkotta.workers.dev",
+    "WEB_ORIGIN": "https://lyzyos.shamilkotta.workers.dev",
   },
   "services": [
     {

@@ -89,9 +89,7 @@ export function AddMembersPanel({
     <div className="pointer-events-none absolute inset-0 z-20">
       <FloatingPanel
         title={title}
-        subtitle={
-          selectableCount === 0 ? emptyAvailableLabel : `${selectableCount} available`
-        }
+        subtitle={selectableCount === 0 ? emptyAvailableLabel : `${selectableCount} available`}
         collapsed={collapsed}
         onCollapsedChange={setCollapsed}
         onClose={onClose}

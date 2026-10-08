@@ -5,9 +5,8 @@
   "compatibility_date": "2026-10-05",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "vars": {
-    "BETTER_AUTH_URL": "http://localhost:3000",
-    "WEB_ORIGIN": "http://localhost:3000",
-    "INTERNAL_SECRET": "dev-secret-change-in-prod",
+    "BETTER_AUTH_URL": "https://lyzyos.shamilkotta.workers.dev",
+    "WEB_ORIGIN": "https://lyzyos.shamilkotta.workers.dev",
   },
   "services": [
     {

@@ -1,3 +1,4 @@
-BETTER_AUTH_SECRET=replace-with-openssl-rand-base64-32
+BETTER_AUTH_SECRET=VYALnlHo6CW7Ib11p9tmMjW5GGN/JdWHIR96fWPOIaE=
+INTERNAL_SECRET=dev-secret-change-in-prod
 BETTER_AUTH_URL=http://localhost:3000
 WEB_ORIGIN=http://localhost:3000
