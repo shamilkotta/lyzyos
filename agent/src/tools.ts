@@ -4,11 +4,14 @@ import {
   createCommentNode,
   createNoteNode,
   createWorkspace,
+  getDocumentInProject,
   getNodeDto,
   getNodeInProject,
+  getObject,
   getProjectWorkspace,
   getWorkspaceMembers,
   insertEdge,
+  isTextLikeFile,
   listUsers,
   listWorkspaceEdges,
   listWorkspaceNodes,
@@ -493,6 +496,84 @@ export function createTools(this: Lyzy) {
         };
       },
     }),
+    read_document: tool({
+      description: `Read the content of a document file stored as a doc node in the workspace.
+        Use this to access briefs, brand guidelines, images, or any file uploaded as a document.
+        Use all_workspace_nodes to discover doc nodes and obtain their docId first.`,
+      inputSchema: z.object({
+        docId: nonEmptyString.describe("The docId of the document to read (from a doc node)"),
+      }),
+      contextSchema: toolSessionSchema,
+      execute: async (input, { context }) => {
+        const doc = await getDocumentInProject(env.DB, {
+          docId: input.docId,
+          projectId: context.projectId,
+        });
+        if (!doc) return { ok: false as const, error: "Document not found" };
+
+        const isImage = doc.mime.toLowerCase().startsWith("image/");
+        const isText = isTextLikeFile(doc.mime, doc.name);
+
+        if (!isImage && !isText) {
+          return {
+            ok: false as const,
+            error: `File type "${doc.mime}" cannot be read. Only image/* and text-like files are supported.`,
+          };
+        }
+
+        const obj = await getObject(env.FILES, doc.r2Key);
+        if (!obj) return { ok: false as const, error: "File not found in storage" };
+
+        const bytes = await obj.arrayBuffer();
+
+        if (isImage) {
+          return {
+            ok: true as const,
+            kind: "image" as const,
+            docId: doc.id,
+            name: doc.name,
+            mime: doc.mime,
+            bytes: new Uint8Array(bytes),
+          };
+        }
+
+        return {
+          ok: true as const,
+          kind: "text" as const,
+          docId: doc.id,
+          name: doc.name,
+          mime: doc.mime,
+          text: new TextDecoder().decode(bytes),
+        };
+      },
+      toModelOutput: ({ output }) => {
+        if (!output.ok) {
+          return { type: "json", value: { error: output.error } };
+        }
+        if (output.kind === "image") {
+          return {
+            type: "content",
+            value: [
+              {
+                type: "file",
+                data: { type: "data", data: output.bytes },
+                mediaType: output.mime,
+                filename: output.name,
+              },
+            ],
+          };
+        }
+        return {
+          type: "content",
+          value: [
+            {
+              type: "text",
+              text: `<file name="${output.name}" mime="${output.mime}">\n${output.text}\n</file>`,
+            },
+          ],
+        };
+      },
+    }),
   } satisfies ToolSet;
 }
 
@@ -521,7 +602,7 @@ function toToolNode(node: NodeDto) {
         })),
       };
     case "doc":
-      return { ...base, fileName: node.body, mime: node.mime };
+      return { ...base, docId: node.docId, fileName: node.body, mime: node.mime };
   }
 }
 

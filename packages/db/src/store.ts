@@ -761,3 +761,18 @@ export async function updateReplyComment(
     .returning();
   return updatedComment;
 }
+
+/** Fetch a document record only if it belongs to a workspace of `projectId`. */
+export async function getDocumentInProject(
+  d1: D1Database,
+  args: { docId: string; projectId: string },
+) {
+  const [row] = await db(d1)
+    .select({ document: documents })
+    .from(documents)
+    .innerJoin(nodes, eq(nodes.id, documents.threadId))
+    .innerJoin(workspaces, eq(workspaces.id, nodes.workspaceId))
+    .where(and(eq(documents.id, args.docId), eq(workspaces.projectId, args.projectId)))
+    .limit(1);
+  return row?.document ?? null;
+}
