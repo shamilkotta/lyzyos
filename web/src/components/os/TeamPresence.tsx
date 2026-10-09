@@ -151,35 +151,41 @@ export function TeamPresence({ members, activeInFor, trailing }: Props) {
     <div ref={rootRef} className="pointer-events-auto flex items-center">
       {members.map((m, i) => {
         const open = activeId === m.id;
+        const agentWorking = m.kind === "agent" && m.status === "working";
         return (
-          <span key={m.id} className={clsx("relative flex h-7 w-7 shrink-0", i > 0 && "-ml-1.5")}>
-            {m.kind === "agent" && m.status === "working" ? (
-              <span className="pointer-events-none absolute inset-0 rounded-full animate-ping bg-ink/30" />
-            ) : null}
-            <button
-              type="button"
-              aria-expanded={open}
-              onMouseEnter={(event) => {
-                clearLeaveTimer();
-                if (!pinnedId) {
-                  setHoveredId(m.id);
-                  placeAt(event.clientX, event.clientY);
-                }
-              }}
-              onMouseMove={(event) => {
-                if (pinnedId) return;
-                if (hoveredId === m.id) placeAt(event.clientX, event.clientY);
-              }}
-              onMouseLeave={scheduleHoverClear}
-              onClick={(event) => {
-                event.stopPropagation();
-                placeAt(event.clientX, event.clientY);
-                setPinnedId((current) => (current === m.id ? null : m.id));
+          <button
+            key={m.id}
+            type="button"
+            aria-expanded={open}
+            onMouseEnter={(event) => {
+              clearLeaveTimer();
+              if (!pinnedId) {
                 setHoveredId(m.id);
-              }}
+                placeAt(event.clientX, event.clientY);
+              }
+            }}
+            onMouseMove={(event) => {
+              if (pinnedId) return;
+              if (hoveredId === m.id) placeAt(event.clientX, event.clientY);
+            }}
+            onMouseLeave={scheduleHoverClear}
+            onClick={(event) => {
+              event.stopPropagation();
+              placeAt(event.clientX, event.clientY);
+              setPinnedId((current) => (current === m.id ? null : m.id));
+              setHoveredId(m.id);
+            }}
+            className={clsx(
+              "relative flex h-7 items-center overflow-hidden rounded-full border border-border/80 bg-surface font-medium text-ink shadow-sm transition-[max-width] duration-300 ease-in-out",
+              agentWorking ? "max-w-[8rem] w-fit justify-start gap-1.5 pl-1 pr-2.5" : "max-w-7 w-7 justify-center text-[10px] hover:z-10 hover:scale-105",
+              i > 0 && "-ml-1.5",
+              open && "z-10 ring-2 ring-ink/15",
+            )}
+          >
+            <span
               className={clsx(
-                "relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-surface text-[10px] font-medium text-ink shadow-sm transition-transform hover:z-10 hover:scale-105",
-                open && "z-10 ring-2 ring-ink/15",
+                "flex shrink-0 items-center justify-center overflow-hidden rounded-full",
+                agentWorking ? "h-5 w-5 border border-border/60 bg-canvas text-[8px]" : "h-full w-full",
               )}
             >
               {m.image ? (
@@ -188,14 +194,32 @@ export function TeamPresence({ members, activeInFor, trailing }: Props) {
               ) : (
                 m.initials
               )}
+            </span>
+
+            {agentWorking ? (
+              <span className="flex items-center gap-0 whitespace-nowrap text-[10px] text-ink-secondary">
+                brewing
+                <span className="ml-0.5 inline-flex items-end gap-px">
+                  {[0, 150, 300].map((delay) => (
+                    <span
+                      key={delay}
+                      className="inline-block animate-bounce leading-none text-ink-tertiary"
+                      style={{ animationDelay: `${delay}ms`, animationDuration: "0.7s" }}
+                    >
+                      ·
+                    </span>
+                  ))}
+                </span>
+              </span>
+            ) : (
               <span
                 className={clsx(
                   "absolute bottom-0 right-0 h-1.5 w-1.5 rounded-full ring-2 ring-canvas",
                   m.status === "online" || m.status === "working" ? "bg-ink" : "bg-ink-tertiary",
                 )}
               />
-            </button>
-          </span>
+            )}
+          </button>
         );
       })}
       {trailing ? (
