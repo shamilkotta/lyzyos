@@ -24,13 +24,6 @@ type GenerateResult = {
 };
 
 export async function handleChat(this: Lyzy, input: ChatBody) {
-  console.log("[agent] handleChat", {
-    projectId: input.projectId,
-    workspaceId: input.workspaceId,
-    threadId: input.threadId,
-    messageCount: input.message.length,
-  });
-
   const thread = getThread.call(this, input.threadId);
   const session: ToolSession = {
     projectId: input.projectId,
@@ -159,53 +152,16 @@ async function runThreadTurn(
   const contextTools = await this.context.tools();
   const tools = { ...contextTools, ...agentTools, ...projectTools };
 
-  console.log("[agent] runThreadTurn", {
-    projectId: session.projectId,
-    workspaceId: session.workspaceId,
-    threadId: session.threadId,
-    model: this.resolveModel(),
-    historyLength: history.length,
-    toolNames: Object.keys(tools),
-  });
-
   try {
-    const result = await generateText({
+    return await generateText({
       model: this.resolveModel(),
       instructions: system,
       messages: await convertToModelMessages(history, { tools }),
       tools,
       toolsContext: toolsContextFor(session, projectTools),
       stopWhen: stepCountIs(this.maxSteps),
-      onStepEnd: (step) => {
-        console.log("[agent] step end", { step: JSON.stringify(step, null, 2) });
-      },
-      onStepStart: (step) => {
-        console.log("[agent] step start", { step: JSON.stringify(step, null, 2) });
-      },
     });
-
-    for (const [i, step] of result.steps.entries()) {
-      for (const part of step.content) {
-        if (part.type === "tool-call" && "toolName" in part) {
-          console.log(`[agent] step ${i} tool-call: ${part.toolName}`, {
-            input: JSON.stringify(part.input, null, 2),
-          });
-        } else if (part.type === "tool-result" && "output" in part) {
-          console.log(`[agent] step ${i} tool-result: ${part.toolCallId}`, {
-            output: JSON.stringify(part.output, null, 2),
-          });
-        } else if (part.type === "tool-error" && "error" in part) {
-          console.error(`[agent] step ${i} tool-error: ${part.toolCallId}`, {
-            error: JSON.stringify(part.error, null, 2),
-          });
-        }
-      }
-    }
-
-    return result;
   } catch (error) {
-    console.error("[agent] generateText threw", error);
-
     if (!options.allowOverflowRetry) throw error;
 
     const classification = this.classifyChatError(error);

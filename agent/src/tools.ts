@@ -81,6 +81,40 @@ export function createTools(this: Lyzy) {
   let statusReplyId: string | null = null;
 
   return {
+    current_context: tool({
+      description:
+        "Get details about the current workspace and thread — id, name, kind, status, and other metadata. Use this when you need the current workspace or thread details for other operations.",
+      inputSchema: z.object({}),
+      contextSchema: toolSessionSchema,
+      execute: async (_input, { context }) => {
+        const [workspace, thread] = await Promise.all([
+          resolveWorkspace(context),
+          resolveNode(context, context.threadId),
+        ]);
+        return {
+          ok: true,
+          workspace: workspace
+            ? {
+                workspaceId: workspace.id,
+                name: workspace.name,
+                slug: workspace.slug,
+                kind: workspace.kind,
+                status: workspace.status,
+                statusNote: workspace.statusNote,
+                attention: workspace.attention,
+              }
+            : null,
+          thread: thread
+            ? {
+                threadId: thread.id,
+                kind: thread.kind,
+                title: thread.title,
+                workspaceId: thread.workspaceId,
+              }
+            : null,
+        };
+      },
+    }),
     all_project_workspaces: tool({
       description: "Get list of workspaces on this current project",
       inputSchema: z.object({}),
