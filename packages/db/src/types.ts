@@ -94,6 +94,7 @@ export const projectDtoSchema = z.object({
   name: z.string(),
   ownerId: z.string(),
   status: z.enum(status),
+  archivedAt: z.number().nullable().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

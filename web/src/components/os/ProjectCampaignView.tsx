@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
-import { CaretLeft, Plus } from "@phosphor-icons/react";
+import { Archive, CaretLeft, Plus } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { CampaignCanvas } from "@/components/canvas/CampaignCanvas";
 import { CanvasToolbar, type CanvasTool } from "./CanvasToolbar";
@@ -13,6 +13,7 @@ import { AddMembersPanel } from "./AddMembersPanel";
 import { getDepartment, members, membersForDepartment, spaces } from "@/lib/data";
 import {
   useAddProjectMembers,
+  useArchiveProject,
   useCreateWorkspace,
   useProject,
   useProjectWorkspaces,
@@ -56,6 +57,10 @@ export function ProjectCampaignView({
   const createPopoverRef = useRef<HTMLDivElement>(null);
   const createWorkspace = useCreateWorkspace(projectId ?? "");
   const { mutateAsync: addProjectMembersAsync } = useAddProjectMembers(projectId ?? "");
+  const { mutate: archiveProjectMutate, isPending: isArchiving } = useArchiveProject(
+    projectId ?? "",
+  );
+  const [confirmArchive, setConfirmArchive] = useState(false);
 
   const space = spaces.find((s) => s.id === spaceId) ?? spaces[0];
   const department = departmentId ? getDepartment(departmentId) : undefined;
@@ -226,6 +231,44 @@ export function ProjectCampaignView({
                 </div>
               </div>
             ) : null}
+          </div>
+        ) : null}
+
+        {boardMode === "overview" && isProject ? (
+          <div className="pointer-events-auto relative">
+            {confirmArchive ? (
+              <div className="flex items-center gap-2 rounded-[8px] border border-border bg-surface/95 px-3 py-1.5 backdrop-blur-md">
+                <span className="text-[12px] text-ink-secondary">Archive this project?</span>
+                <button
+                  type="button"
+                  disabled={isArchiving}
+                  onClick={() => {
+                    archiveProjectMutate(undefined, {
+                      onSuccess: () => router.push(routes.projects),
+                    });
+                  }}
+                  className="text-[12px] font-medium text-red-500 transition-opacity hover:opacity-70 disabled:opacity-40"
+                >
+                  {isArchiving ? "Archiving…" : "Archive"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmArchive(false)}
+                  className="text-[12px] text-ink-tertiary transition-colors hover:text-ink"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                aria-label="Archive project"
+                onClick={() => setConfirmArchive(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-border bg-surface/95 text-ink-tertiary backdrop-blur-md transition-colors hover:border-border-strong hover:text-ink"
+              >
+                <Archive size={14} />
+              </button>
+            )}
           </div>
         ) : null}
 

@@ -88,6 +88,34 @@ export async function listProjects() {
     .parse(unwrapData(await parseJson(await fetch("/api/projects", { cache: "no-store" }))));
 }
 
+export async function listArchivedProjects() {
+  return z
+    .array(projectDtoSchema)
+    .parse(
+      unwrapData(await parseJson(await fetch("/api/projects/archived", { cache: "no-store" }))),
+    );
+}
+
+export async function archiveProject(projectId: string) {
+  await parseJson(
+    await fetch(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: true }),
+    }),
+  );
+}
+
+export async function unarchiveProject(projectId: string) {
+  await parseJson(
+    await fetch(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: false }),
+    }),
+  );
+}
+
 export async function getProject(projectId: string) {
   return projectDetailSchema.parse(
     unwrapData(await parseJson(await fetch(`/api/projects/${projectId}`, { cache: "no-store" }))),

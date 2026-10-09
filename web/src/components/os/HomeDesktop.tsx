@@ -1,6 +1,6 @@
 "use client";
 
-import { CirclesFour, DotOutline, SpinnerGap, ArrowRight, Clock } from "@phosphor-icons/react";
+import { Archive, CirclesFour, DotOutline, SpinnerGap, ArrowRight, Clock } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { PRODUCT_NAME } from "@/lib/data";
 import { useProjects } from "@/lib/queries/projects";
@@ -141,9 +141,19 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
         {!isLoading && liveProjects.length > 0 ? (
           <section className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
             <div>
-              <h2 className="mb-3 text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-                All projects
-              </h2>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
+                  All projects
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => router.push(routes.archives)}
+                  className="flex items-center gap-1.5 text-[11px] text-ink-tertiary transition-colors hover:text-ink"
+                >
+                  <Archive size={12} />
+                  Archives
+                </button>
+              </div>
               <ul className="rounded-[12px] border border-border bg-surface">
                 {liveProjects.slice(0, 8).map((project) => (
                   <li key={project.id} className="border-b border-border last:border-0">

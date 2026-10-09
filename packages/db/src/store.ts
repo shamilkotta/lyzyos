@@ -5,6 +5,8 @@ import {
   eq,
   exists,
   inArray,
+  isNotNull,
+  isNull,
   or,
   type InferInsertModel,
   type SQL,
@@ -72,6 +74,7 @@ const projectColumns = {
   name: projects.name,
   ownerId: projects.ownerId,
   status: projects.status,
+  archivedAt: projects.archivedAt,
   createdAt: projects.createdAt,
   updatedAt: projects.updatedAt,
 };
@@ -192,8 +195,35 @@ export async function listProjectsForUser(d1: D1Database, userId: string) {
   return database
     .select()
     .from(projects)
-    .where(canSeeProject(database, userId))
+    .where(and(canSeeProject(database, userId), isNull(projects.archivedAt)))
     .orderBy(desc(projects.updatedAt));
+}
+
+export async function listArchivedProjectsForUser(d1: D1Database, userId: string) {
+  const database = db(d1);
+  return database
+    .select()
+    .from(projects)
+    .where(and(canSeeProject(database, userId), isNotNull(projects.archivedAt)))
+    .orderBy(desc(projects.archivedAt));
+}
+
+export async function archiveProject(d1: D1Database, projectId: string) {
+  const [row] = await db(d1)
+    .update(projects)
+    .set({ archivedAt: Date.now(), updatedAt: Date.now() })
+    .where(eq(projects.id, projectId))
+    .returning();
+  return row ?? null;
+}
+
+export async function unarchiveProject(d1: D1Database, projectId: string) {
+  const [row] = await db(d1)
+    .update(projects)
+    .set({ archivedAt: null, updatedAt: Date.now() })
+    .where(eq(projects.id, projectId))
+    .returning();
+  return row ?? null;
 }
 
 export async function getProjectForUser(d1: D1Database, projectId: string, userId: string) {
