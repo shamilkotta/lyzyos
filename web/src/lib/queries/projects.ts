@@ -8,6 +8,7 @@ import {
   createMember,
   createProject,
   createWorkspace,
+  fetchAgentStatus,
   getProject,
   getWorkspaceBoard,
   listArchivedProjects,
@@ -191,4 +192,14 @@ export function useUnarchiveProject(projectId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
     },
   });
+}
+
+export function useAgentStatus(projectId: string) {
+  const { data } = useQuery({
+    queryKey: queryKeys.projects.agentStatus(projectId),
+    queryFn: () => fetchAgentStatus(projectId),
+    refetchInterval: 3000,
+    refetchIntervalInBackground: false,
+  });
+  return data ?? false;
 }

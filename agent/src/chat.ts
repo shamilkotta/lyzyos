@@ -177,21 +177,27 @@ async function runThreadTurn(
       toolsContext: toolsContextFor(session, projectTools),
       stopWhen: stepCountIs(this.maxSteps),
       onStepEnd: (step) => {
-        console.log("[agent] step end", { step });
+        console.log("[agent] step end", { step: JSON.stringify(step, null, 2) });
       },
       onStepStart: (step) => {
-        console.log("[agent] step start", { step });
+        console.log("[agent] step start", { step: JSON.stringify(step, null, 2) });
       },
     });
 
     for (const [i, step] of result.steps.entries()) {
       for (const part of step.content) {
         if (part.type === "tool-call" && "toolName" in part) {
-          console.log(`[agent] step ${i} tool-call: ${part.toolName}`, { input: part.input });
+          console.log(`[agent] step ${i} tool-call: ${part.toolName}`, {
+            input: JSON.stringify(part.input, null, 2),
+          });
         } else if (part.type === "tool-result" && "output" in part) {
-          console.log(`[agent] step ${i} tool-result: ${part.toolCallId}`, { output: part.output });
+          console.log(`[agent] step ${i} tool-result: ${part.toolCallId}`, {
+            output: JSON.stringify(part.output, null, 2),
+          });
         } else if (part.type === "tool-error" && "error" in part) {
-          console.error(`[agent] step ${i} tool-error: ${part.toolCallId}`, { error: part.error });
+          console.error(`[agent] step ${i} tool-error: ${part.toolCallId}`, {
+            error: JSON.stringify(part.error, null, 2),
+          });
         }
       }
     }

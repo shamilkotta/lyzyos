@@ -139,12 +139,15 @@ type MemberInput = Pick<MemberPreview, "id" | "name"> & {
   kind?: MemberPreview["kind"];
 };
 
-export function membersFromWorkspace(authors: MemberInput[], onlineNames: Set<string> = new Set()) {
+export function membersFromWorkspace(
+  authors: MemberInput[],
+  onlineNames: Set<string> = new Set(),
+  agentWorking = false,
+) {
   const byId = new Map<string, Member>();
   for (const author of authors) {
     if (!author.id || byId.has(author.id)) continue;
     const kind = author.kind ?? "human";
-    // The agent is always on duty; humans are online when they have a live sync connection.
     const online =
       kind === "agent" ||
       onlineNames.has(author.name) ||
@@ -154,7 +157,8 @@ export function membersFromWorkspace(authors: MemberInput[], onlineNames: Set<st
       memberFromAuthor(kind, author.name, {
         id: author.id,
         image: author.image,
-        status: kind === "agent" ? "working" : online ? "online" : "away",
+        status:
+          kind === "agent" ? (agentWorking ? "working" : "online") : online ? "online" : "away",
       }),
     );
   }

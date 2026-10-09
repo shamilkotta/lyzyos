@@ -67,7 +67,7 @@ import { debounce, type Debounced } from "@/lib/debounce";
 import { PROJECT_DOC_ACCEPT, filterAllowedProjectDocs } from "@/lib/docs";
 import type { BoardState, BoardNode } from "@/lib/project-types";
 import { documentFileUrl, isCommentNode, isDocNode } from "@/lib/project-types";
-import { useAddWorkspaceMembers, useProjectBoard } from "@/lib/queries/projects";
+import { useAddWorkspaceMembers, useAgentStatus, useProjectBoard } from "@/lib/queries/projects";
 import { routes } from "@/lib/routes";
 import { useCurrentUser } from "@/lib/session";
 import { useProjectSync } from "@/lib/useProjectSync";
@@ -407,15 +407,18 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
     onBoard: applyRemoteBoard,
   });
 
+  const agentWorking = useAgentStatus(projectId);
+
   const presenceMembers = useMemo<Member[]>(() => {
     const onlineNames = new Set(peers.map((p) => p.name));
-    const roster = membersFromWorkspace(resolvedBoard?.members ?? [], onlineNames);
+    const roster = membersFromWorkspace(resolvedBoard?.members ?? [], onlineNames, agentWorking);
     if (roster.length > 0) return roster;
     return membersFromWorkspace(
       peers.map((p) => ({ id: p.clientId, name: p.name })),
       onlineNames,
+      agentWorking,
     );
-  }, [peers, resolvedBoard?.members]);
+  }, [peers, resolvedBoard?.members, agentWorking]);
 
   const mentionTargets = useMemo<MentionTarget[]>(
     () =>

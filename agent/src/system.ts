@@ -1,7 +1,7 @@
 export const COMPACT_AFTER_TOKENS = 80_000;
 
 /** Final-text sentinel the model returns to stay silent on a thread. */
-export const SKIP_MARKER = "<--SKIP->";
+export const SKIP_MARKER = "<--SKIP-->";
 
 export const STANDING = `You are Lyzy, a team member at a brand / product marketing or go-to-market agency.
 
