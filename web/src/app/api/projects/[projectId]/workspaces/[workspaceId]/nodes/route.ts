@@ -1,4 +1,5 @@
 import { notifyAgent } from "@/server/agent";
+import { getExecutionContext } from "@/server/env";
 import { findSessionWorkspace } from "@/server/workspace";
 import { clientIdFromRequest, publishNodeUpserted } from "@/server/sync/publish";
 import {
@@ -48,14 +49,10 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Expected multipart/form-data" }, { status: 400 });
   }
 
-  const {
-    session,
-    env,
-    workspace: userWorkspace,
-  } = await findSessionWorkspace({
-    projectId,
-    workspaceId,
-  });
+  const [{ session, env, workspace: userWorkspace }, ctx] = await Promise.all([
+    findSessionWorkspace({ projectId, workspaceId }),
+    getExecutionContext(),
+  ]);
   if (!userWorkspace) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
@@ -127,19 +124,23 @@ export async function POST(request: Request, { params }: Params) {
     });
 
     if (commentId) {
-      notifyAgent(env, {
-        projectId,
-        threadId: nodeId,
-        workspaceId: userWorkspace.id,
-        message: [
-          {
-            id: commentId,
-            role: "user",
-            name: session.user.name,
-            message: body.data.trim(),
-          },
-        ],
-      });
+      notifyAgent(
+        env,
+        {
+          projectId,
+          threadId: nodeId,
+          workspaceId: userWorkspace.id,
+          message: [
+            {
+              id: commentId,
+              role: "user",
+              name: session.user.name,
+              message: body.data.trim(),
+            },
+          ],
+        },
+        ctx,
+      );
     }
   }
 

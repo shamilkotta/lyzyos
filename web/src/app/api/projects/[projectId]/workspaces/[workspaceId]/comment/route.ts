@@ -1,4 +1,5 @@
 import { notifyAgent } from "@/server/agent";
+import { getExecutionContext } from "@/server/env";
 import { findSessionWorkspace } from "@/server/workspace";
 import { clientIdFromRequest, publishNodeUpserted } from "@/server/sync/publish";
 import { addCommentToThread, getNodeDto, getNodeInWorkspace, touchProject } from "@lyzyos/db";
@@ -28,7 +29,10 @@ export async function POST(req: Request, { params }: Params) {
     );
   }
 
-  const { session, env, workspace } = await findSessionWorkspace({ projectId, workspaceId });
+  const [{ session, env, workspace }, ctx] = await Promise.all([
+    findSessionWorkspace({ projectId, workspaceId }),
+    getExecutionContext(),
+  ]);
   if (!workspace) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
@@ -65,19 +69,23 @@ export async function POST(req: Request, { params }: Params) {
 
   await publishNodeUpserted(env, workspace.id, node, clientIdFromRequest(req));
 
-  notifyAgent(env, {
-    projectId,
-    threadId: parsed.data.threadId,
-    workspaceId: workspace.id,
-    message: [
-      {
-        id: result.id,
-        role: "user",
-        name: session.user.name,
-        message: parsed.data.message,
-      },
-    ],
-  });
+  notifyAgent(
+    env,
+    {
+      projectId,
+      threadId: parsed.data.threadId,
+      workspaceId: workspace.id,
+      message: [
+        {
+          id: result.id,
+          role: "user",
+          name: session.user.name,
+          message: parsed.data.message,
+        },
+      ],
+    },
+    ctx,
+  );
 
   return NextResponse.json({ data: node }, { status: 200 });
 }

@@ -1,6 +1,6 @@
 import { notifyAgent } from "@/server/agent";
 import { KICKOFF_PROMPT } from "@/server/constants";
-import { getEnv } from "@/server/env";
+import { getEnv, getExecutionContext } from "@/server/env";
 import { requireSession } from "@/server/session";
 import {
   createDb,
@@ -40,7 +40,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const session = await requireSession();
-  const env = await getEnv();
+  const [env, ctx] = await Promise.all([getEnv(), getExecutionContext()]);
   const db = createDb(env.DB);
 
   const contentType = request.headers.get("Content-Type") ?? "";
@@ -133,18 +133,22 @@ export async function POST(request: Request) {
 
   await touchProject(env.DB, project.id);
 
-  notifyAgent(env, {
-    projectId: project.id,
-    threadId: workspace.id,
-    workspaceId: workspace.id,
-    message: [
-      {
-        role: "user",
-        name: session.user.name,
-        message: KICKOFF_PROMPT,
-      },
-    ],
-  });
+  notifyAgent(
+    env,
+    {
+      projectId: project.id,
+      threadId: workspace.id,
+      workspaceId: workspace.id,
+      message: [
+        {
+          role: "user",
+          name: session.user.name,
+          message: KICKOFF_PROMPT,
+        },
+      ],
+    },
+    ctx,
+  );
 
   return NextResponse.json(
     {
