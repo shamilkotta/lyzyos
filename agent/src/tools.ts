@@ -12,6 +12,7 @@ import {
   getWorkspaceMembers,
   insertEdge,
   isTextLikeFile,
+  listNodeEdges,
   listUsers,
   listWorkspaceEdges,
   listWorkspaceNodes,
@@ -125,6 +126,21 @@ export function createTools(this: Lyzy) {
         if (!workspace) return { ok: false, error: "Workspace not found" };
         const edges = await listWorkspaceEdges(env.DB, workspace.id);
         return { ok: true, workspaceId: workspace.id, edges };
+      },
+    }),
+    get_node_edges: tool({
+      description: `Get all edges connected to a specific node — both incoming edges (where the node is the target) and outgoing edges (where the node is the source). Useful to understand how a node relates to others on the canvas.`,
+      inputSchema: z.object({
+        nodeId: nonEmptyString.describe("The node id whose edges you want to retrieve"),
+      }),
+      contextSchema: toolSessionSchema,
+      execute: async (input, { context }) => {
+        const node = await resolveNode(context, input.nodeId);
+        if (!node) return { ok: false, error: "Node not found" };
+        const edges = await listNodeEdges(env.DB, input.nodeId);
+        const incoming = edges.filter((e) => e.targetId === input.nodeId);
+        const outgoing = edges.filter((e) => e.sourceId === input.nodeId);
+        return { ok: true, nodeId: input.nodeId, incoming, outgoing };
       },
     }),
     add_node: tool({
