@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { useArchivedProjects, useUnarchiveProject } from "@/lib/queries/projects";
 import { routes } from "@/lib/routes";
 
-const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" });
+const dateFormat = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 
 function formatDate(timestamp: number) {
   return dateFormat.format(timestamp);

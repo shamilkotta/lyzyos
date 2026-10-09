@@ -411,4 +411,17 @@ export async function addProjectMembers(projectId: string, userIds: string[]) {
   return addProjectMembersResultSchema.parse(payload);
 }
 
+export async function fetchAgentStatus(projectId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/projects/${projectId}/agent-status`, {
+      headers: clientHeaders(),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { working: boolean };
+    return data.working ?? false;
+  } catch {
+    return false;
+  }
+}
+
 export type { BoardNode, NodeDto };

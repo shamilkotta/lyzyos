@@ -14,8 +14,19 @@ export class Lyzy extends Think<Env> {
     sql: this.ctx.storage.sql,
   });
 
+  #working = false;
+
   async handleChat(input: ChatBody) {
-    return handleChat.call(this, input);
+    this.#working = true;
+    try {
+      return await handleChat.call(this, input);
+    } finally {
+      this.#working = false;
+    }
+  }
+
+  getStatus() {
+    return { working: this.#working };
   }
 
   override getModel() {

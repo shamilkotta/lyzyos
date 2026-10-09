@@ -1,6 +1,13 @@
 "use client";
 
-import { Archive, CirclesFour, DotOutline, SpinnerGap, ArrowRight, Clock } from "@phosphor-icons/react";
+import {
+  Archive,
+  CirclesFour,
+  DotOutline,
+  SpinnerGap,
+  ArrowRight,
+  Clock,
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { PRODUCT_NAME } from "@/lib/data";
 import { useProjects } from "@/lib/queries/projects";

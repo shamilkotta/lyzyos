@@ -16,6 +16,9 @@ export default {
     const trigger = await handleAgentTrigger(request, env, ctx);
     if (trigger) return trigger;
 
+    const status = await handleAgentStatus(request, env);
+    if (status) return status;
+
     return new Response("Not found", { status: 404 });
 
     // return (await routeAgentRequest(request, env)) || new Response("Not found", { status: 404 });
@@ -52,4 +55,22 @@ async function handleAgentTrigger(request: Request, env: Env, ctx: ExecutionCont
   );
 
   return Response.json({ ok: true, accepted: true });
+}
+
+async function handleAgentStatus(request: Request, env: Env) {
+  const url = new URL(request.url);
+  if (url.pathname !== "/status") return null;
+
+  if (request.method !== "GET") {
+    return Response.json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  const projectId = url.searchParams.get("projectId")?.trim();
+  if (!projectId) {
+    return Response.json({ error: "projectId required" }, { status: 400 });
+  }
+
+  const agent = env.AGENT.getByName(projectId);
+  const status = await agent.getStatus();
+  return Response.json(status);
 }
