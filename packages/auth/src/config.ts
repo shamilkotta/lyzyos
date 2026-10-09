@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "better-auth";
 import { admin } from "better-auth/plugins";
+import { oneTimeToken } from "better-auth/plugins/one-time-token";
 
 export type EmailMessage = { to: string; subject: string; text: string; html?: string };
 export type EmailSender = (message: EmailMessage) => Promise<void>;
@@ -60,7 +61,10 @@ export function buildAuthConfig(
 ): BetterAuthOptions {
   return {
     ...baseAuthOptions(options.sendEmail),
-    plugins: [adminPlugin(options.adminUserIds)],
+    plugins: [
+      adminPlugin(options.adminUserIds),
+      oneTimeToken({ expiresIn: 1, disableSetSessionCookie: true }),
+    ],
   };
 }
 

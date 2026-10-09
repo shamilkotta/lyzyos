@@ -1,5 +1,4 @@
-import { getWorkspaceForUser } from "@lyzyos/db";
-import { requireSessionUser } from "./auth";
+import { getAuth } from "./auth";
 import { corsHeaders, json } from "./cors";
 import { clientIdFromRequest } from "./sync/publish";
 
@@ -27,26 +26,29 @@ export async function handleApi(request: Request, env: Env, _ctx: ExecutionConte
 }
 
 async function upgradeWorkspaceSync(request: Request, env: Env, workspaceId: string) {
-  const user = await requireSessionUser(request, env);
-  if (!user) {
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token");
+  if (!token) return new Response("Unauthorized", { status: 401 });
+
+  let userName: string;
+  try {
+    const auth = getAuth(env);
+    const result = await auth.api.verifyOneTimeToken({ body: { token } });
+    userName = result.user.name;
+  } catch {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const workspace = await getWorkspaceForUser(env.DB, workspaceId, user.id);
-  if (!workspace) {
-    return new Response("Forbidden", { status: 403 });
-  }
-
-  const url = new URL(request.url);
-  url.searchParams.set("workspaceId", workspace.id);
+  url.searchParams.set("workspaceId", workspaceId);
+  url.searchParams.delete("token");
   if (!url.searchParams.get("clientId")) {
     const fromHeader = clientIdFromRequest(request);
     if (fromHeader) url.searchParams.set("clientId", fromHeader);
   }
-  if (!url.searchParams.get("name") && user.name) {
-    url.searchParams.set("name", user.name.slice(0, 40));
+  if (!url.searchParams.get("name")) {
+    url.searchParams.set("name", userName.slice(0, 40));
   }
 
-  const stub = env.WORKSPACE_SYNC.getByName(workspace.id);
+  const stub = env.WORKSPACE_SYNC.getByName(workspaceId);
   return stub.fetch(new Request(url.toString(), request));
 }

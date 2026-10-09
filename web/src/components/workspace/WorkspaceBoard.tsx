@@ -1181,7 +1181,7 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
                         if (!draftBody.trim()) setEditingNodeId(selected.id);
                       }}
                       title="Double-click to edit"
-                      className="min-h-[200px] w-full flex-1 cursor-text rounded-[8px] border border-border bg-canvas px-3 py-3 text-left"
+                      className="flex min-h-[200px] w-full flex-1 cursor-text flex-col justify-start rounded-[8px] border border-border bg-canvas px-3 py-3 text-left"
                     >
                       {draftBody.trim() ? (
                         <Markdown>{draftBody}</Markdown>

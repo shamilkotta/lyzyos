@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createDb } from "@lyzyos/db";
 import * as authSchema from "@lyzyos/db/auth-schema";
+import { oneTimeToken } from "better-auth/plugins/one-time-token";
 import {
   adminPlugin,
   baseAuthOptions,
@@ -33,7 +34,11 @@ export function createAuth<const P extends readonly AuthPlugin[] = []>(
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     trustedOrigins: trustedOrigins(env.WEB_ORIGIN),
-    plugins: [adminPlugin(options.adminUserIds), ...((options.plugins ?? []) as P)],
+    plugins: [
+      adminPlugin(options.adminUserIds),
+      oneTimeToken({ expiresIn: 1, disableSetSessionCookie: true }),
+      ...((options.plugins ?? []) as P),
+    ],
     ...(options.waitUntil
       ? {
           advanced: {
