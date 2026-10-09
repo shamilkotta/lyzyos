@@ -275,6 +275,7 @@ function WorkspaceCanvas({
 
 export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Props) {
   const router = useRouter();
+  const { user: currentUser } = useCurrentUser();
   const {
     data: boardData,
     error: boardError,
@@ -459,11 +460,15 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
       setAnswer("");
       return;
     }
-    if (metaDirtyRef.current) return;
+    setAnswer("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
+
+  useEffect(() => {
+    if (!selected || metaDirtyRef.current) return;
     setDraftTitle(selected.title);
     setDraftBody(selected.body);
-    setAnswer("");
-  }, [selected?.id, selected?.title, selected?.body, selected]);
+  }, [selected?.id, selected?.title, selected?.body]);
 
   const reloadFromApi = useCallback(async () => {
     const result = await refetchBoard();
@@ -654,10 +659,9 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
   }, [persistNodeMeta]);
 
   const placeOnCanvas = useCallback(
-    async (activeTool: CanvasTool, position: { x: number; y: number }) => {
-      if (busy) return;
-
+    (activeTool: CanvasTool, position: { x: number; y: number }) => {
       if (activeTool === "doc") {
+        if (busy) return;
         pendingDocPos.current = position;
         fileRef.current?.click();
         return;
@@ -665,34 +669,81 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
 
       if (activeTool !== "comment" && activeTool !== "note") return;
 
-      setBusy(true);
-      try {
-        const kind = activeTool === "comment" ? "comment" : "note";
-        const { node } = await placeProjectNode(projectId, workspaceId, {
-          kind,
-          title: kind === "comment" ? "" : "Untitled note",
-          data: "",
-          x: position.x,
-          y: position.y,
-        });
-        if (node) {
+      const now = Date.now();
+      const optimisticId = `optimistic-${crypto.randomUUID()}`;
+      const kind = activeTool === "comment" ? "comment" : "note";
+      const optimisticNode: BoardNode =
+        kind === "comment"
+          ? {
+              id: optimisticId,
+              workspaceId,
+              kind: "comment",
+              title: "",
+              body: "",
+              authorId: currentUser?.id ?? "",
+              authorKind: "human",
+              authorName: currentUser?.name ?? "You",
+              x: position.x,
+              y: position.y,
+              createdAt: now,
+              updatedAt: now,
+              replies: [],
+              openAudience: null,
+              status: null,
+            }
+          : {
+              id: optimisticId,
+              workspaceId,
+              kind: "note",
+              title: "Untitled note",
+              body: "",
+              authorId: currentUser?.id ?? "",
+              authorKind: "human",
+              authorName: currentUser?.name ?? "You",
+              x: position.x,
+              y: position.y,
+              createdAt: now,
+              updatedAt: now,
+            };
+
+      updateBoard((prev) => ({ ...prev, nodes: [...prev.nodes, optimisticNode] }));
+      onSelect(optimisticId);
+
+      void placeProjectNode(projectId, workspaceId, {
+        kind,
+        title: kind === "comment" ? "" : "Untitled note",
+        data: "",
+        x: position.x,
+        y: position.y,
+      })
+        .then(({ node }) => {
+          if (node) {
+            updateBoard((prev) => ({
+              ...prev,
+              nodes: prev.nodes.map((n) => (n.id === optimisticId ? node : n)),
+            }));
+            onSelect(node.id);
+          } else {
+            updateBoard((prev) => ({
+              ...prev,
+              nodes: prev.nodes.filter((n) => n.id !== optimisticId),
+            }));
+            onSelect(null);
+            void reloadFromApi().then((nodes) => {
+              const pick = nodes[nodes.length - 1]?.id ?? null;
+              if (pick) onSelect(pick);
+            });
+          }
+        })
+        .catch(() => {
           updateBoard((prev) => ({
             ...prev,
-            nodes: prev.nodes.some((n) => n.id === node.id)
-              ? prev.nodes.map((n) => (n.id === node.id ? node : n))
-              : [...prev.nodes, node],
+            nodes: prev.nodes.filter((n) => n.id !== optimisticId),
           }));
-          onSelect(node.id);
-        } else {
-          const nodes = await reloadFromApi();
-          const pick = nodes[nodes.length - 1]?.id ?? null;
-          if (pick) onSelect(pick);
-        }
-      } finally {
-        setBusy(false);
-      }
+          onSelect(null);
+        });
     },
-    [busy, onSelect, projectId, reloadFromApi, updateBoard, workspaceId],
+    [busy, currentUser, onSelect, projectId, reloadFromApi, updateBoard, workspaceId],
   );
 
   const onFiles = useCallback(
@@ -763,32 +814,51 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
     metaDirtyRef.current = true;
   }, []);
 
-  const submitComment = useCallback(async () => {
+  const submitComment = useCallback(() => {
     const text = answer.trim();
-    if (!selected || !isCommentNode(selected) || !text || busy) return;
+    if (!selected || !isCommentNode(selected) || !text) return;
 
     const threadId = selected.id;
-    setBusy(true);
-    try {
-      const { node } = await replyToCommentThread(projectId, workspaceId, {
-        threadId,
-        message: text,
+    const prevNode = selected;
+
+    setAnswer("");
+
+    const optimisticReply = {
+      id: `optimistic-${crypto.randomUUID()}`,
+      authorKind: "human" as const,
+      authorName: currentUser?.name ?? "You",
+      body: text,
+      createdAt: Date.now(),
+    };
+
+    updateBoard((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((n) =>
+        n.id === threadId && isCommentNode(n)
+          ? { ...n, replies: [...n.replies, optimisticReply] }
+          : n,
+      ),
+    }));
+
+    void replyToCommentThread(projectId, workspaceId, { threadId, message: text })
+      .then(({ node }) => {
+        if (!node) {
+          void reloadFromApi();
+          return;
+        }
+        updateBoard((prev) => ({
+          ...prev,
+          nodes: prev.nodes.map((n) => (n.id === threadId ? node : n)),
+        }));
+      })
+      .catch(() => {
+        setAnswer(text);
+        updateBoard((prev) => ({
+          ...prev,
+          nodes: prev.nodes.map((n) => (n.id === threadId ? prevNode : n)),
+        }));
       });
-      setAnswer("");
-      if (!node) {
-        void reloadFromApi();
-        return;
-      }
-      updateBoard((prev) => ({
-        ...prev,
-        nodes: prev.nodes.map((n) => (n.id === threadId ? node : n)),
-      }));
-    } catch {
-      void reloadFromApi();
-    } finally {
-      setBusy(false);
-    }
-  }, [answer, busy, projectId, reloadFromApi, selected, updateBoard, workspaceId]);
+  }, [answer, currentUser, projectId, reloadFromApi, selected, updateBoard, workspaceId]);
 
   const resolveComment = useCallback(async () => {
     if (!selected || !isCommentNode(selected) || busy) return;
@@ -994,7 +1064,7 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                           e.preventDefault();
-                          void submitComment();
+                          submitComment();
                         }
                       }}
                       placeholder="Write a comment… Use @Name to mention someone."
@@ -1002,11 +1072,11 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
                     />
                     <button
                       type="button"
-                      disabled={busy || answer.trim().length === 0}
-                      onClick={() => void submitComment()}
+                      disabled={answer.trim().length === 0}
+                      onClick={() => submitComment()}
                       aria-label="Send comment"
                       className={
-                        busy || answer.trim().length === 0
+                        answer.trim().length === 0
                           ? "flex h-10 w-10 shrink-0 cursor-not-allowed items-center justify-center rounded-[8px] bg-surface-soft text-ink-tertiary"
                           : "flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-ink text-white transition-colors hover:bg-[#333333]"
                       }

@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { CaretDown, CaretUp, X } from "@phosphor-icons/react";
 import clsx from "clsx";
+
+const DEFAULT_WIDTH = 340;
+const MIN_WIDTH = 240;
+const MAX_WIDTH = 640;
 
 type Props = {
   title: string;
@@ -29,6 +33,10 @@ export function FloatingPanel({
   scrollToBottomKey,
 }: Props) {
   const bodyRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(DEFAULT_WIDTH);
 
   useEffect(() => {
     if (scrollToBottomKey === undefined || collapsed) return;
@@ -36,15 +44,51 @@ export function FloatingPanel({
     if (body) body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
   }, [scrollToBottomKey, collapsed]);
 
+  const onHandleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = width;
+  }, [width]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      // dragging left (negative delta) increases width
+      const delta = dragStartX.current - e.clientX;
+      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragStartWidth.current + delta)));
+    };
+    const onMouseUp = () => {
+      isDragging.current = false;
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
   return (
     <aside
+      style={{ width: `min(${width}px, calc(100% - 2rem))` }}
       className={clsx(
-        "pointer-events-auto absolute right-4 z-30 flex w-[min(340px,calc(100%-2rem))] flex-col overflow-hidden rounded-[12px] border border-border bg-surface/95 shadow-[0_8px_28px_rgba(0,0,0,0.08)] backdrop-blur-md transition-[max-height,box-shadow] duration-200",
+        "pointer-events-auto absolute right-4 z-30 flex flex-col overflow-hidden rounded-[12px] border border-border bg-surface/95 shadow-[0_8px_28px_rgba(0,0,0,0.08)] backdrop-blur-md transition-[max-height,box-shadow] duration-200",
         collapsed ? "h-auto" : "bottom-4 max-h-[calc(100%-2rem)]",
         !/\btop-/.test(className ?? "") && "top-4",
         className,
       )}
     >
+      {/* Resize handle — drag left edge to widen / narrow */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        onMouseDown={onHandleMouseDown}
+        className="group absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize"
+      >
+        <div className="absolute bottom-2 left-[3px] top-2 w-px rounded-full bg-transparent transition-colors group-hover:bg-ink/25" />
+      </div>
+
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <p className="truncate text-[12px] font-medium text-ink">{title}</p>
