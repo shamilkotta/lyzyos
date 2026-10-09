@@ -4,6 +4,7 @@ export const routes = {
   forgotPassword: "/forgot-password",
   resetPassword: "/reset-password",
   projects: "/projects",
+  archives: "/projects/archives",
   project: (projectId: string) => `/projects/${projectId}`,
   projectWorkspace: (projectId: string, workspaceId: string) =>
     `/projects/${projectId}/workspaces/${workspaceId}`,

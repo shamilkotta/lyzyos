@@ -24,6 +24,7 @@ export const projects = sqliteTable(
       .notNull()
       .references(() => user.id),
     status: text("status", { enum: status }).notNull().default("in_progress"),
+    archivedAt: integer("archived_at"),
     createdAt: integer("created_at")
       .$defaultFn(() => Date.now())
       .notNull(),

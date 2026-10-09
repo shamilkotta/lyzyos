@@ -4,14 +4,17 @@ import { useMutation, useQuery, useQueryClient, type Query } from "@tanstack/rea
 import {
   addProjectMembers,
   addWorkspaceMembers,
+  archiveProject,
   createMember,
   createProject,
   createWorkspace,
   getProject,
   getWorkspaceBoard,
+  listArchivedProjects,
   listProjects,
   listDirectory,
   listProjectWorkspaces,
+  unarchiveProject,
   updateWorkspace,
 } from "@/lib/api";
 import type { ApiProjectListItem } from "@/lib/project-types";
@@ -154,6 +157,38 @@ export function useAddProjectMembers(projectId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.workspaces(projectId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+    },
+  });
+}
+
+export function useArchivedProjects() {
+  return useQuery({
+    queryKey: queryKeys.projects.archived,
+    queryFn: listArchivedProjects,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useArchiveProject(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => archiveProject(projectId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.archived });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+    },
+  });
+}
+
+export function useUnarchiveProject(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => unarchiveProject(projectId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.archived });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
     },
   });
 }
