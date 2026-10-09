@@ -46,6 +46,14 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
     textareaRef.current?.focus();
   }, [focusToken]);
 
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const maxH = window.innerHeight * 0.4;
+    el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+  }, [brief]);
+
   const addFiles = (files: FileList | File[]) => {
     const allowed = filterAllowedProjectDocs(files);
     if (allowed.length === 0) {
@@ -191,6 +199,7 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
               rows={3}
+              style={{ minHeight: "4.5rem", maxHeight: "40vh", overflowY: "auto" }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
