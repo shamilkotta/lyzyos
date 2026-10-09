@@ -2,11 +2,15 @@ import "server-only";
 
 import type { AppEnv } from "./env";
 
-export function notifyAgent(env: AppEnv, body: Record<string, unknown>) {
+export function notifyAgent(
+  env: AppEnv,
+  body: Record<string, unknown>,
+  ctx?: { waitUntil: (p: Promise<unknown>) => void },
+) {
   const agent = env.AGENT;
   if (!agent) return;
 
-  void agent
+  const p = agent
     .fetch(
       new Request("https://agent/chat", {
         method: "POST",
@@ -23,4 +27,8 @@ export function notifyAgent(env: AppEnv, body: Record<string, unknown>) {
     .catch((err: unknown) => {
       console.warn("agent chat failed", err);
     });
+
+  if (ctx) {
+    ctx.waitUntil(p);
+  }
 }
