@@ -287,6 +287,13 @@ export async function listWorkspaceEdges(d1: D1Database, workspaceId: string) {
   return rows.map(rowToEdge);
 }
 
+export async function listNodeEdges(d1: D1Database, nodeId: string) {
+  const rows = await db(d1).query.nodeEdges.findMany({
+    where: or(eq(nodeEdges.sourceId, nodeId), eq(nodeEdges.targetId, nodeId)),
+  });
+  return rows.map(rowToEdge);
+}
+
 export async function listWorkspaceNodes(d1: D1Database, workspaceId: string) {
   const rows = await db(d1).query.nodes.findMany({
     where: eq(nodes.workspaceId, workspaceId),
