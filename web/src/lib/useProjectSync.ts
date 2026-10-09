@@ -48,14 +48,30 @@ export function useProjectSync({
     let retryTimer: number | null = null;
     let pingTimer: number | null = null;
 
-    const connect = () => {
+    const connect = async () => {
       if (closed) return;
       setStatus((s) => (s === "live" ? "live" : "connecting"));
+
+      let token: string;
+      try {
+        const res = await fetch(`/api/workspaces/${workspaceId}/sync-token`, { method: "POST" });
+        if (!res.ok) throw new Error("token fetch failed");
+        const data = (await res.json()) as { token: string };
+        token = data.token;
+      } catch {
+        if (closed) return;
+        retryTimer = window.setTimeout(() => {
+          retryMs = Math.min(retryMs * 1.6, 8_000);
+          connect();
+        }, retryMs);
+        return;
+      }
 
       const ws = new WebSocket(
         workspaceSyncWsUrl(workspaceId, {
           clientId,
           name: getClientName(),
+          token,
         }),
       );
       wsRef.current = ws;

@@ -89,13 +89,13 @@ export function snapshotToBoardState(snapshot: BoardSnapshot, prev?: BoardState 
 
 export function workspaceSyncWsUrl(
   workspaceId: string,
-  params: { clientId: string; name: string },
+  params: { clientId: string; name: string; token: string },
 ) {
-  const base =
-    process.env.NEXT_PUBLIC_SYNC_URL ?? "http://localhost:8788";
+  const base = process.env.NEXT_PUBLIC_SYNC_URL ?? "http://localhost:8788";
   const url = new URL(`/api/workspaces/${workspaceId}/sync`, base);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.searchParams.set("clientId", params.clientId);
   url.searchParams.set("name", params.name);
+  url.searchParams.set("token", params.token);
   return url.toString();
 }
