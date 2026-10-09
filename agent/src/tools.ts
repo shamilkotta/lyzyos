@@ -131,16 +131,18 @@ export function createTools(this: Lyzy) {
     get_node_edges: tool({
       description: `Get all edges connected to a specific node — both incoming edges (where the node is the target) and outgoing edges (where the node is the source). Useful to understand how a node relates to others on the canvas.`,
       inputSchema: z.object({
-        nodeId: nonEmptyString.describe("The node id whose edges you want to retrieve"),
+        nodeId: optionalString.describe(
+          "The node/thread id whose edges you want to retrieve, Optional, if omitted return edges for the current thread/node",
+        ),
       }),
       contextSchema: toolSessionSchema,
       execute: async (input, { context }) => {
-        const node = await resolveNode(context, input.nodeId);
+        const node = await resolveNode(context, input.nodeId ?? context.threadId);
         if (!node) return { ok: false, error: "Node not found" };
-        const edges = await listNodeEdges(env.DB, input.nodeId);
-        const incoming = edges.filter((e) => e.targetId === input.nodeId);
-        const outgoing = edges.filter((e) => e.sourceId === input.nodeId);
-        return { ok: true, nodeId: input.nodeId, incoming, outgoing };
+        const edges = await listNodeEdges(env.DB, node.id);
+        const incoming = edges.filter((e) => e.targetId === node.id);
+        const outgoing = edges.filter((e) => e.sourceId === node.id);
+        return { ok: true, nodeId: node.id, incoming, outgoing };
       },
     }),
     add_node: tool({
