@@ -14,19 +14,19 @@ export class Lyzy extends Think<Env> {
     sql: this.ctx.storage.sql,
   });
 
-  #working = false;
+  #activeThreads = new Set<string>();
 
   async handleChat(input: ChatBody) {
-    this.#working = true;
+    this.#activeThreads.add(input.threadId);
     try {
       return await handleChat.call(this, input);
     } finally {
-      this.#working = false;
+      this.#activeThreads.delete(input.threadId);
     }
   }
 
   getStatus() {
-    return { working: this.#working };
+    return { working: this.#activeThreads.size > 0 };
   }
 
   override getModel() {
