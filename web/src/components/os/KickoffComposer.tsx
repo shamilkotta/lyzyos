@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Paperclip, FileText, X, SpinnerGap } from "@phosphor-icons/react";
+import {
+  ArrowUpIcon,
+  PaperclipIcon,
+  FileTextIcon,
+  XIcon,
+  SpinnerGapIcon,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import clsx from "clsx";
@@ -34,7 +40,6 @@ export function KickoffComposer({ onOpen }: Props) {
   const phase = created ? "ready" : createProject.isPending ? "analyzing" : "compose";
   const error = notice ?? createProject.error?.message ?? null;
 
-  // Grow with the content up to 40% of the viewport.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -97,7 +102,11 @@ export function KickoffComposer({ onOpen }: Props) {
 
       {phase === "analyzing" ? (
         <div className="rounded-[12px] border border-border bg-surface px-4 py-8 text-center">
-          <SpinnerGap size={22} weight="bold" className="mx-auto animate-spin text-ink-tertiary" />
+          <SpinnerGapIcon
+            size={22}
+            weight="bold"
+            className="mx-auto animate-spin text-ink-tertiary"
+          />
           <p className="mt-3 text-[14px] font-medium text-ink">Saving intake…</p>
           <p className="mt-1 text-[13px] text-ink-secondary">
             Storing brief and documents, then waking Lyzy for this project.
@@ -154,7 +163,6 @@ export function KickoffComposer({ onOpen }: Props) {
           }}
           onDragLeave={(e) => {
             e.preventDefault();
-            // dragleave also fires when crossing into a child; only reset when leaving the box.
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
           }}
           onDrop={(e) => {
@@ -194,7 +202,7 @@ export function KickoffComposer({ onOpen }: Props) {
                     key={id}
                     className="inline-flex max-w-full items-center gap-1.5 rounded-[6px] border border-border bg-canvas py-1 pl-2 pr-1 text-[12px] text-ink"
                   >
-                    <FileText size={13} weight="bold" className="shrink-0 text-ink-tertiary" />
+                    <FileTextIcon size={13} weight="bold" className="shrink-0 text-ink-tertiary" />
                     <span className="truncate">{file.name}</span>
                     <span className="shrink-0 font-mono text-[10px] text-ink-tertiary">
                       {formatSize(file.size)}
@@ -205,7 +213,7 @@ export function KickoffComposer({ onOpen }: Props) {
                       onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== id))}
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-ink-tertiary hover:bg-surface-soft hover:text-ink"
                     >
-                      <X size={11} weight="bold" />
+                      <XIcon size={11} weight="bold" />
                     </button>
                   </li>
                 ))}
@@ -231,7 +239,7 @@ export function KickoffComposer({ onOpen }: Props) {
                 onClick={() => fileRef.current?.click()}
                 className="flex h-8 items-center gap-1.5 rounded-[6px] px-2 text-[12px] text-ink-secondary transition-colors hover:bg-surface-soft hover:text-ink"
               >
-                <Paperclip size={14} weight="bold" />
+                <PaperclipIcon size={14} weight="bold" />
                 Attach
               </button>
               {attachments.length > 0 ? (
@@ -257,7 +265,7 @@ export function KickoffComposer({ onOpen }: Props) {
               )}
             >
               Start
-              <ArrowUp size={13} weight="bold" />
+              <ArrowUpIcon size={13} weight="bold" />
             </button>
           </div>
         </div>

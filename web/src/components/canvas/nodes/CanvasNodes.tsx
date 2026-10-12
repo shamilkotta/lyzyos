@@ -3,14 +3,14 @@
 import { memo, type ReactNode } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import {
-  ArrowRight,
-  ChatCircleText,
-  CheckCircle,
-  CircleDashed,
-  Cube,
-  NoteBlank,
-  SquaresFour,
-  WarningCircle,
+  ArrowRightIcon,
+  ChatCircleTextIcon,
+  CheckCircleIcon,
+  CircleDashedIcon,
+  CubeIcon,
+  NoteBlankIcon,
+  SquaresFourIcon,
+  WarningCircleIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { DocMediaPreview, mediaKindFromPreview } from "@/components/docs/DocMediaPreview";
@@ -20,7 +20,6 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { workStatusLabel } from "@/lib/status";
 import type { Member, StatusTone, WorkStatus } from "@/lib/types";
 
-/** A workspace card on the project overview graph. */
 export type WorkspaceSummaryData = {
   title: string;
   summary: string;
@@ -32,7 +31,6 @@ export type WorkspaceSummaryData = {
 
 export type BoardCardKind = "note" | "comment" | "doc";
 
-/** A note / comment thread / document card on a workspace board. */
 export type BoardCardData = {
   title: string;
   summary: string;
@@ -50,7 +48,6 @@ export type BoardCardData = {
 export type WorkspaceSummaryNode = Node<WorkspaceSummaryData, "workspace">;
 export type BoardCardNode = Node<BoardCardData, "board">;
 
-/** Marks the in-card "Open" affordance so click handlers can tell it apart from a select. */
 export const OPEN_WORKSPACE_ATTR = "data-open-workspace";
 
 function NodeShell({
@@ -146,14 +143,15 @@ export function MemberStack({
 }
 
 function ToneIcon({ tone }: { tone: StatusTone }) {
-  if (tone === "ok") return <CheckCircle size={14} weight="fill" className="text-pale-green-ink" />;
+  if (tone === "ok")
+    return <CheckCircleIcon size={14} weight="fill" className="text-pale-green-ink" />;
   if (tone === "danger") {
-    return <WarningCircle size={14} weight="fill" className="text-pale-red-ink" />;
+    return <WarningCircleIcon size={14} weight="fill" className="text-pale-red-ink" />;
   }
   if (tone === "warn") {
-    return <WarningCircle size={14} weight="fill" className="text-pale-yellow-ink" />;
+    return <WarningCircleIcon size={14} weight="fill" className="text-pale-yellow-ink" />;
   }
-  return <CircleDashed size={14} weight="bold" className="text-ink-tertiary" />;
+  return <CircleDashedIcon size={14} weight="bold" className="text-ink-tertiary" />;
 }
 
 export const WorkspaceSummaryCard = memo(function WorkspaceSummaryCard({
@@ -166,7 +164,7 @@ export const WorkspaceSummaryCard = memo(function WorkspaceSummaryCard({
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-[6px] bg-surface-soft text-ink">
-            <SquaresFour size={14} weight="bold" />
+            <SquaresFourIcon size={14} weight="bold" />
           </span>
           <ToneIcon tone={data.tone} />
         </div>
@@ -193,7 +191,7 @@ export const WorkspaceSummaryCard = memo(function WorkspaceSummaryCard({
           className="nodrag nopan inline-flex cursor-pointer items-center gap-0.5 text-[10px] font-medium text-ink hover:underline"
         >
           Open
-          <ArrowRight size={11} weight="bold" />
+          <ArrowRightIcon size={11} weight="bold" />
         </span>
       </div>
     </NodeShell>
@@ -277,7 +275,7 @@ const KIND_CHIP: Record<BoardCardKind, string> = {
   note: "bg-surface-soft text-ink-secondary",
 };
 
-const KIND_ICON = { doc: Cube, comment: ChatCircleText, note: NoteBlank } as const;
+const KIND_ICON = { doc: CubeIcon, comment: ChatCircleTextIcon, note: NoteBlankIcon } as const;
 
 export const BoardCard = memo(function BoardCard({ data, selected }: NodeProps<BoardCardNode>) {
   const KindIcon = KIND_ICON[data.icon];

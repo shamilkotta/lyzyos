@@ -1,6 +1,6 @@
 "use client";
 
-import { SpinnerGap } from "@phosphor-icons/react";
+import { SpinnerGapIcon } from "@phosphor-icons/react";
 import { useCurrentUser } from "@/lib/session";
 
 export function SettingsView() {
@@ -21,7 +21,7 @@ export function SettingsView() {
 
         {isPending ? (
           <div className="mt-8 flex items-center gap-2 text-[13px] text-ink-tertiary">
-            <SpinnerGap size={14} className="animate-spin" />
+            <SpinnerGapIcon size={14} className="animate-spin" />
             Loading account…
           </div>
         ) : (

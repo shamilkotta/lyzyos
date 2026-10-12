@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CaretDown, CaretUp, X } from "@phosphor-icons/react";
+import { CaretDownIcon, CaretUpIcon, XIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 
 const DEFAULT_WIDTH = 340;
@@ -17,7 +17,6 @@ type Props = {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
-  /** When this value changes, the body scrolls to the bottom (e.g. a new message arrived). */
   scrollToBottomKey?: string;
 };
 
@@ -41,13 +40,11 @@ export function FloatingPanel({
     if (body) body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
   }, [scrollToBottomKey, collapsed]);
 
-  // Listeners exist only for the duration of a drag rather than for the panel's lifetime.
   const startResize = (e: React.PointerEvent) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = width;
     const onMove = (event: PointerEvent) => {
-      // The handle is on the left edge, so dragging left (negative delta) widens the panel.
       const next = startWidth + (startX - event.clientX);
       setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, next)));
     };
@@ -69,7 +66,6 @@ export function FloatingPanel({
         className,
       )}
     >
-      {/* Resize handle — drag left edge to widen / narrow */}
       <div
         role="separator"
         aria-orientation="vertical"
@@ -94,7 +90,11 @@ export function FloatingPanel({
           onClick={() => onCollapsedChange(!collapsed)}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-ink-tertiary hover:bg-surface-soft hover:text-ink"
         >
-          {collapsed ? <CaretDown size={14} weight="bold" /> : <CaretUp size={14} weight="bold" />}
+          {collapsed ? (
+            <CaretDownIcon size={14} weight="bold" />
+          ) : (
+            <CaretUpIcon size={14} weight="bold" />
+          )}
         </button>
         {onClose ? (
           <button
@@ -103,7 +103,7 @@ export function FloatingPanel({
             onClick={onClose}
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-ink-tertiary hover:bg-surface-soft hover:text-ink"
           >
-            <X size={14} weight="bold" />
+            <XIcon size={14} weight="bold" />
           </button>
         ) : null}
       </div>

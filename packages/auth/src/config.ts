@@ -7,9 +7,8 @@ export type EmailSender = (message: EmailMessage) => Promise<void>;
 
 export type AuthPlugin = NonNullable<BetterAuthOptions["plugins"]>[number];
 
-/** Fallback when no real email provider is wired (local dev): log the link to the server console. */
-const consoleSender: EmailSender = async ({ to, subject, text }) => {
-  console.info(`[lyzy-auth] email → ${to} · ${subject}\n${text}`);
+const unavailableEmailSender: EmailSender = async () => {
+  console.error("[lyzy-auth] email delivery is not configured");
 };
 
 function resetPasswordEmail(url: string): Pick<EmailMessage, "subject" | "text" | "html"> {
@@ -20,7 +19,9 @@ function resetPasswordEmail(url: string): Pick<EmailMessage, "subject" | "text" 
 }
 
 /** Core options shared by the runtime and the CLI — everything except plugins. */
-export function baseAuthOptions(sendEmail: EmailSender = consoleSender): BetterAuthOptions {
+export function baseAuthOptions(
+  sendEmail: EmailSender = unavailableEmailSender,
+): BetterAuthOptions {
   return {
     appName: "Lyzy",
     emailAndPassword: {

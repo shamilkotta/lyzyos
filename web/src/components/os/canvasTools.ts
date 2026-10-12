@@ -1,18 +1,24 @@
-import { ChatCircleText, Cursor, FileText, HandGrabbing, NoteBlank } from "@phosphor-icons/react";
+import {
+  ChatCircleTextIcon,
+  CursorIcon,
+  FileTextIcon,
+  HandGrabbingIcon,
+  NoteBlankIcon,
+} from "@phosphor-icons/react";
 
 export type CanvasTool = "select" | "hand" | "comment" | "note" | "doc";
 
-type ToolDef = { id: CanvasTool; label: string; shortcut: string; icon: typeof Cursor };
+type ToolDef = { id: CanvasTool; label: string; shortcut: string; icon: typeof CursorIcon };
 
 const NAVIGATION_TOOLS: ToolDef[] = [
-  { id: "select", label: "Select", shortcut: "s", icon: Cursor },
-  { id: "hand", label: "Pan", shortcut: "p", icon: HandGrabbing },
+  { id: "select", label: "Select", shortcut: "s", icon: CursorIcon },
+  { id: "hand", label: "Pan", shortcut: "p", icon: HandGrabbingIcon },
 ];
 
 export const PLACEMENT_TOOLS: ToolDef[] = [
-  { id: "comment", label: "Comment", shortcut: "c", icon: ChatCircleText },
-  { id: "note", label: "Note", shortcut: "n", icon: NoteBlank },
-  { id: "doc", label: "Document", shortcut: "d", icon: FileText },
+  { id: "comment", label: "Comment", shortcut: "c", icon: ChatCircleTextIcon },
+  { id: "note", label: "Note", shortcut: "n", icon: NoteBlankIcon },
+  { id: "doc", label: "Document", shortcut: "d", icon: FileTextIcon },
 ];
 
 export const TOOLS = {

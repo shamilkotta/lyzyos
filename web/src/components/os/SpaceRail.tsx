@@ -1,6 +1,6 @@
 "use client";
 
-import { House, Users, GearSix, Plus } from "@phosphor-icons/react";
+import { HouseIcon, UsersIcon, GearSixIcon, PlusIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import type { RailId } from "@/lib/routes";
 
@@ -10,10 +10,10 @@ type Props = {
   onNew: () => void;
 };
 
-const items: { id: RailId; label: string; icon: typeof House }[] = [
-  { id: "home", label: "Home", icon: House },
-  { id: "members", label: "Members", icon: Users },
-  { id: "settings", label: "Settings", icon: GearSix },
+const items: { id: RailId; label: string; icon: typeof HouseIcon }[] = [
+  { id: "home", label: "Home", icon: HouseIcon },
+  { id: "members", label: "Members", icon: UsersIcon },
+  { id: "settings", label: "Settings", icon: GearSixIcon },
 ];
 
 export function SpaceRail({ active, onChange, onNew }: Props) {
@@ -26,7 +26,7 @@ export function SpaceRail({ active, onChange, onNew }: Props) {
         aria-label="New project"
         title="New project"
       >
-        <Plus size={16} weight="bold" />
+        <PlusIcon size={16} weight="bold" />
       </button>
 
       <nav className="flex flex-1 flex-col gap-1">

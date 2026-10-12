@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Archive,
-  ArrowRight,
-  CirclesFour,
-  FilePlus,
-  GearSix,
-  MagnifyingGlass,
-  Users,
+  ArchiveIcon,
+  ArrowRightIcon,
+  CirclesFourIcon,
+  FilePlusIcon,
+  GearSixIcon,
+  MagnifyingGlassIcon,
+  UsersIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { useProjects } from "@/lib/queries/projects";
@@ -19,7 +19,7 @@ type Command = {
   id: string;
   label: string;
   hint: string;
-  icon: typeof FilePlus;
+  icon: typeof FilePlusIcon;
   href: string;
 };
 
@@ -28,33 +28,32 @@ const STATIC_COMMANDS: Command[] = [
     id: "new-project",
     label: "New project from brief",
     hint: "Create",
-    icon: FilePlus,
+    icon: FilePlusIcon,
     href: routes.projects,
   },
   {
     id: "members",
     label: "Open members directory",
     hint: "Members",
-    icon: Users,
+    icon: UsersIcon,
     href: routes.members,
   },
   {
     id: "archives",
     label: "Open archived projects",
     hint: "Archives",
-    icon: Archive,
+    icon: ArchiveIcon,
     href: routes.archives,
   },
   {
     id: "settings",
     label: "Open settings",
     hint: "Settings",
-    icon: GearSix,
+    icon: GearSixIcon,
     href: routes.settings,
   },
 ];
 
-/** Mounted only while open, so the query and listeners live exactly as long as the palette. */
 export function CommandPalette({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const { data: projects = [] } = useProjects();
@@ -66,7 +65,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       id: `project:${project.id}`,
       label: project.name,
       hint: "Project",
-      icon: CirclesFour,
+      icon: CirclesFourIcon,
       href: routes.project(project.id),
     }));
     const needle = query.trim().toLowerCase();
@@ -81,7 +80,6 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   };
 
   useEffect(() => {
-    // Capture phase + preventDefault so the shell's own Escape handling stands down.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -109,7 +107,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         className="relative w-full max-w-lg overflow-hidden rounded-[12px] border border-border bg-surface shadow-[var(--shadow-soft)] fade-up"
       >
         <div className="flex items-center gap-2 border-b border-border px-3">
-          <MagnifyingGlass size={16} className="text-ink-tertiary" weight="bold" />
+          <MagnifyingGlassIcon size={16} className="text-ink-tertiary" weight="bold" />
           <input
             autoFocus
             value={query}
@@ -159,7 +157,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                     </span>
                     <span className="block text-[12px] text-ink-tertiary">{cmd.hint}</span>
                   </span>
-                  <ArrowRight size={14} className="text-ink-tertiary" />
+                  <ArrowRightIcon size={14} className="text-ink-tertiary" />
                 </button>
               </li>
             );

@@ -20,7 +20,10 @@ export async function getAuth() {
     },
     {
       plugins: [nextCookies()],
-      sendEmail: makeEmailSender(env.EMAIL),
+      sendEmail: makeEmailSender(env.EMAIL, {
+        logToConsole: env.APP_ENV === "development",
+        fromAddress: env.EMAIL_FROM_ADDRESS,
+      }),
       waitUntil: ctx ? (promise) => ctx.waitUntil(promise) : undefined,
     },
   );

@@ -2,16 +2,14 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Plus } from "@phosphor-icons/react";
+import { PlusIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { Avatar } from "@/components/ui/Avatar";
 import type { Member } from "@/lib/types";
 
 type Props = {
   members: Member[];
-  /** Optional workspace/room labels to show under the member. */
   activeInFor?: (member: Member) => string[] | undefined;
-  /** Rendered after the avatar stack (e.g. add-member control). */
   trailing?: ReactNode;
 };
 
@@ -23,10 +21,9 @@ function statusLabel(status: Member["status"]) {
   return "Online";
 }
 
-/** Offset so the card sits at the bottom-right of the pointer tip. */
 const POINTER_GAP_X = 12;
 const POINTER_GAP_Y = 12;
-const CARD_WIDTH = 224; // w-56
+const CARD_WIDTH = 224;
 
 function clampPoint(point: Point): Point {
   if (typeof window === "undefined") return point;
@@ -41,7 +38,6 @@ function clampPoint(point: Point): Point {
 export function TeamPresence({ members, activeInFor, trailing }: Props) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
-  // Only ever set from pointer events, so the portal below never renders during SSR.
   const [point, setPoint] = useState<Point | null>(null);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -85,7 +81,6 @@ export function TeamPresence({ members, activeInFor, trailing }: Props) {
 
   const scheduleHoverClear = () => {
     clearLeaveTimer();
-    if (pinnedId) return; // a pinned card stays until dismissed
     leaveTimer.current = setTimeout(() => {
       setHoveredId(null);
       setPoint(null);
@@ -226,7 +221,6 @@ export function TeamPresence({ members, activeInFor, trailing }: Props) {
   );
 }
 
-/** Dashed "+" that sits at the end of a presence stack and opens the add-members panel. */
 export function AddMemberButton({
   label,
   open,
@@ -248,7 +242,7 @@ export function AddMemberButton({
         open && "z-10 border-ink/40 text-ink ring-2 ring-ink/15",
       )}
     >
-      <Plus size={12} weight="bold" />
+      <PlusIcon size={12} weight="bold" />
     </button>
   );
 }

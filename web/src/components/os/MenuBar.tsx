@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CaretRight, CirclesFour, MagnifyingGlass, SignOut } from "@phosphor-icons/react";
+import {
+  CaretRightIcon,
+  CirclesFourIcon,
+  MagnifyingGlassIcon,
+  SignOutIcon,
+} from "@phosphor-icons/react";
 import { signOut } from "@/lib/auth-client";
 import { PRODUCT_NAME } from "@/lib/constants";
 import { initials } from "@/lib/format";
@@ -11,7 +16,6 @@ import { useCurrentUser } from "@/lib/session";
 
 type Props = {
   projectName?: string;
-  /** Set while inside a workspace; the project crumb then links back to the overview. */
   workspaceName?: string;
   onBackToProject?: () => void;
   onHome: () => void;
@@ -78,7 +82,7 @@ function AccountMenu() {
             onClick={handleSignOut}
             className="mt-1 flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left text-[12px] text-ink-secondary transition-colors hover:bg-surface-soft hover:text-ink"
           >
-            <SignOut size={14} weight="bold" />
+            <SignOutIcon size={14} weight="bold" />
             Sign out
           </button>
         </div>
@@ -99,7 +103,7 @@ export function MenuBar({ projectName, workspaceName, onBackToProject, onHome, o
           className="flex items-center gap-2 rounded-[6px] px-1.5 py-1 transition-colors hover:bg-surface-soft"
         >
           <span className="flex h-6 w-6 items-center justify-center rounded-[5px] bg-ink text-white">
-            <CirclesFour size={13} weight="bold" />
+            <CirclesFourIcon size={13} weight="bold" />
           </span>
           <span className="font-brand text-[14px] font-semibold tracking-[-0.03em] text-ink">
             {PRODUCT_NAME}
@@ -108,7 +112,7 @@ export function MenuBar({ projectName, workspaceName, onBackToProject, onHome, o
 
         {projectName ? (
           <>
-            <CaretRight size={12} className="shrink-0 text-ink-tertiary" />
+            <CaretRightIcon size={12} className="shrink-0 text-ink-tertiary" />
             {inWorkspace ? (
               <button
                 type="button"
@@ -127,7 +131,7 @@ export function MenuBar({ projectName, workspaceName, onBackToProject, onHome, o
 
         {inWorkspace ? (
           <>
-            <CaretRight size={12} className="shrink-0 text-ink-tertiary" />
+            <CaretRightIcon size={12} className="shrink-0 text-ink-tertiary" />
             <span className="truncate text-[13px] text-ink" aria-current="page">
               {workspaceName || "Workspace"}
             </span>
@@ -141,7 +145,7 @@ export function MenuBar({ projectName, workspaceName, onBackToProject, onHome, o
           onClick={onCommand}
           className="flex h-8 items-center gap-2 rounded-[6px] border border-border bg-canvas px-2.5 text-[12px] text-ink-secondary transition-colors hover:border-border-strong hover:text-ink"
         >
-          <MagnifyingGlass size={14} weight="bold" />
+          <MagnifyingGlassIcon size={14} weight="bold" />
           <span className="hidden sm:inline">Search or run</span>
           <kbd>⌘K</kbd>
         </button>

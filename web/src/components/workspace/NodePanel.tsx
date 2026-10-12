@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, FileText, PencilSimple, Trash } from "@phosphor-icons/react";
+import {
+  ArrowUpIcon,
+  CheckIcon,
+  FileTextIcon,
+  PencilSimpleIcon,
+  TrashIcon,
+} from "@phosphor-icons/react";
 import clsx from "clsx";
 import { MemberAvatar, MemberStack } from "@/components/canvas/nodes/CanvasNodes";
 import { DocMediaPreview, mediaKindFromPreview } from "@/components/docs/DocMediaPreview";
@@ -38,7 +44,7 @@ function DocFile({
   if (!node.docId) {
     return (
       <div className="flex items-center gap-2 rounded-[8px] border border-border bg-canvas px-3 py-2 text-[12px] text-ink-secondary">
-        <FileText size={14} weight="bold" />
+        <FileTextIcon size={14} weight="bold" />
         <span className="truncate">{title || "No file preview"}</span>
       </div>
     );
@@ -54,12 +60,6 @@ function DocFile({
   );
 }
 
-/**
- * Title (+ markdown body for notes) editor with debounced autosave.
- *
- * `draft` is null while the fields match the server, so remote edits show up live; once the
- * user types, their draft wins until a save round-trips.
- */
 function NodeEditor({
   projectId,
   node,
@@ -85,17 +85,13 @@ function NodeEditor({
     if (!pending) return;
     const title = pending.title.trim();
     const saved = await saveNode(current.id, {
-      // Notes always keep a title; clearing it reverts to the previous one.
       title: current.kind === "note" ? title || current.title : title,
       ...(current.kind === "note" ? { data: pending.body } : {}),
     });
-    // Drop the draft only if nothing was typed while the request was in flight.
     if (saved) setDraft((d) => (d === pending ? null : d));
   }, []);
-  // Flushes on close too, so the last keystrokes are never lost.
   const save = useDebouncedCallback(persist, META_SAVE_MS);
 
-  // A draft typed while the node was still being created is saved once it has a real id.
   useEffect(() => {
     if (latest.current.draft) save.schedule();
   }, [node.id, save]);
@@ -133,9 +129,9 @@ function NodeEditor({
               className="flex h-7 items-center gap-1.5 rounded-[6px] px-2 text-[12px] text-ink-secondary transition-colors hover:bg-surface-soft hover:text-ink"
             >
               {editingBody ? (
-                <Check size={13} weight="bold" />
+                <CheckIcon size={13} weight="bold" />
               ) : (
-                <PencilSimple size={13} weight="bold" />
+                <PencilSimpleIcon size={13} weight="bold" />
               )}
               {editingBody ? "Done" : "Edit"}
             </button>
@@ -243,7 +239,6 @@ function CommentComposer({ onSend }: { onSend: (message: string) => Promise<void
     const message = text.trim();
     if (!message) return;
     setText("");
-    // On failure the reply is rolled back, so give the text back to retry.
     onSend(message).catch(() => setText((current) => current || message));
   };
 
@@ -276,7 +271,7 @@ function CommentComposer({ onSend }: { onSend: (message: string) => Promise<void
               : "cursor-not-allowed bg-surface-soft text-ink-tertiary",
           )}
         >
-          <ArrowUp size={15} weight="bold" />
+          <ArrowUpIcon size={15} weight="bold" />
         </button>
       </div>
       <p className="text-[11px] text-ink-tertiary">Linked nodes are sent as context. ⌘↵ to send.</p>
@@ -287,7 +282,6 @@ function CommentComposer({ onSend }: { onSend: (message: string) => Promise<void
 type Props = {
   projectId: string;
   node: BoardNode;
-  /** Survives the optimistic → real id swap, so drafts and composer text aren't reset. */
   panelKey: string;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
@@ -313,7 +307,6 @@ export function NodePanel({
   onReply,
 }: Props) {
   const comment = isCommentNode(node) ? node : null;
-  // Agent-authored notes and documents are read-only.
   const editable = node.authorKind === "human" && node.kind !== "comment" ? node : null;
 
   return (
@@ -344,7 +337,7 @@ export function NodePanel({
               onClick={onDelete}
               className="ml-auto flex h-7 items-center gap-1.5 rounded-[6px] px-2 text-[12px] text-ink-tertiary transition-colors hover:bg-surface-soft hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Trash size={13} weight="bold" />
+              <TrashIcon size={13} weight="bold" />
               Delete
             </button>
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Robot, SpinnerGap, User } from "@phosphor-icons/react";
+import { PlusIcon, RobotIcon, SpinnerGapIcon, UserIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AGENT_ROLE } from "@lyzyos/db";
@@ -26,7 +26,7 @@ function PersonAvatar({ person, agent }: { person: DirectoryUser; agent?: boolea
     <Avatar
       name={person.name}
       image={person.image}
-      fallback={agent ? <Robot size={16} weight="bold" /> : undefined}
+      fallback={agent ? <RobotIcon size={16} weight="bold" /> : undefined}
       className="h-9 w-9 border border-border text-[11px]"
     />
   );
@@ -204,7 +204,7 @@ export function TeamDirectory() {
           </div>
           {isAdmin && !addOpen ? (
             <Button variant="secondary" className="shrink-0" onClick={() => setAddOpen(true)}>
-              <Plus size={14} weight="bold" />
+              <PlusIcon size={14} weight="bold" />
               Add member
             </Button>
           ) : null}
@@ -214,14 +214,18 @@ export function TeamDirectory() {
 
         {isLoading ? (
           <div className="mt-8 flex items-center gap-2 text-[13px] text-ink-tertiary">
-            <SpinnerGap size={14} className="animate-spin" />
+            <SpinnerGapIcon size={14} className="animate-spin" />
             Loading team…
           </div>
         ) : error ? (
           <p className="mt-8 text-[13px] text-ink-secondary">Could not load the team.</p>
         ) : (
           <>
-            <Section title="Agents" count={agents.length} icon={<Robot size={13} weight="bold" />}>
+            <Section
+              title="Agents"
+              count={agents.length}
+              icon={<RobotIcon size={13} weight="bold" />}
+            >
               {agents.map((agent) => (
                 <li
                   key={agent.id}
@@ -241,7 +245,11 @@ export function TeamDirectory() {
               ))}
             </Section>
 
-            <Section title="People" count={people.length} icon={<User size={13} weight="bold" />}>
+            <Section
+              title="People"
+              count={people.length}
+              icon={<UserIcon size={13} weight="bold" />}
+            >
               {people.map((person) => (
                 <li
                   key={person.id}

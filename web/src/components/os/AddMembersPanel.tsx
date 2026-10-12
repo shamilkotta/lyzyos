@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, SpinnerGap } from "@phosphor-icons/react";
+import { CheckIcon, SpinnerGapIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { AGENT_ROLE } from "@lyzyos/db";
 import { FloatingPanel } from "@/components/os/FloatingPanel";
@@ -94,7 +94,7 @@ export function AddMembersPanel({
             >
               {submitting ? (
                 <>
-                  <SpinnerGap size={14} className="animate-spin" />
+                  <SpinnerGapIcon size={14} className="animate-spin" />
                   Adding…
                 </>
               ) : (
@@ -106,7 +106,7 @@ export function AddMembersPanel({
       >
         {isLoading ? (
           <div className="flex items-center gap-2 text-[13px] text-ink-tertiary">
-            <SpinnerGap size={14} className="animate-spin" />
+            <SpinnerGapIcon size={14} className="animate-spin" />
             Loading people…
           </div>
         ) : error ? (
@@ -156,7 +156,7 @@ export function AddMembersPanel({
                       )}
                       aria-hidden
                     >
-                      {(already || isSelected) && <Check size={11} weight="bold" />}
+                      {(already || isSelected) && <CheckIcon size={11} weight="bold" />}
                     </span>
                   </button>
                 </li>

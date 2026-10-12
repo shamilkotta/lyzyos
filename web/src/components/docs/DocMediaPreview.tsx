@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowsOut, X } from "@phosphor-icons/react";
+import { ArrowsOutIcon, XIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 
 export type DocMediaKind = "image" | "pdf" | "file";
@@ -12,7 +12,6 @@ type Props = {
   kind: DocMediaKind;
   mime?: string;
   title?: string;
-  /** Compact canvas card vs taller sidebar. */
   size?: "card" | "panel";
   className?: string;
 };
@@ -30,7 +29,6 @@ function PreviewBody({
 }) {
   if (kind === "image") {
     return (
-      // Dynamic API file URLs — next/image isn't a fit here.
       // oxlint-disable-next-line next/no-img-element
       <img
         src={url}
@@ -48,8 +46,6 @@ function PreviewBody({
     );
   }
 
-  // A PDF viewer is a whole browsing context; mounting one per canvas card is far too heavy, so
-  // cards show a tile and the viewer only loads in the side panel or fullscreen.
   if (kind === "pdf" && size !== "card") {
     return (
       <iframe
@@ -84,7 +80,6 @@ export function DocMediaPreview({ url, kind, mime, title, size = "card", classNa
 
   useEffect(() => {
     if (!open) return;
-    // Capture phase + preventDefault so the shell's "Escape leaves the workspace" stands down.
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
@@ -119,7 +114,7 @@ export function DocMediaPreview({ url, kind, mime, title, size = "card", classNa
           }}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <ArrowsOut size={11} weight="bold" />
+          <ArrowsOutIcon size={11} weight="bold" />
         </button>
       </div>
 
@@ -149,7 +144,7 @@ export function DocMediaPreview({ url, kind, mime, title, size = "card", classNa
                     className="flex h-8 w-8 items-center justify-center rounded-[6px] text-ink-secondary hover:bg-surface-soft hover:text-ink"
                     onClick={() => setOpen(false)}
                   >
-                    <X size={16} weight="bold" />
+                    <XIcon size={16} weight="bold" />
                   </button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-auto bg-canvas p-2">

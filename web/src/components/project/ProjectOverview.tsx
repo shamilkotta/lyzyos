@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
-import { Archive, Plus } from "@phosphor-icons/react";
+import { ArchiveIcon, PlusIcon } from "@phosphor-icons/react";
 import { AddMembersPanel } from "@/components/os/AddMembersPanel";
 import { CanvasToolbar, type CanvasTool } from "@/components/os/CanvasToolbar";
 import { AddMemberButton, TeamPresence } from "@/components/os/TeamPresence";
@@ -68,7 +68,7 @@ function CreateWorkspaceButton({ projectId }: { projectId: string }) {
         aria-haspopup="dialog"
         onClick={() => (open ? close() : setOpen(true))}
       >
-        <Plus size={13} weight="bold" />
+        <PlusIcon size={13} weight="bold" />
         Add workspace
       </Button>
       {open ? (
@@ -126,7 +126,7 @@ function ArchiveProjectButton({ projectId }: { projectId: string }) {
         onClick={() => setConfirming(true)}
         className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-[8px] border border-border bg-surface/95 text-ink-tertiary backdrop-blur-md transition-colors hover:border-border-strong hover:text-ink"
       >
-        <Archive size={14} />
+        <ArchiveIcon size={14} />
       </button>
     );
   }

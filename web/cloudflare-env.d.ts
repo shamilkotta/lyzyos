@@ -11,6 +11,8 @@ interface __BaseEnv_CloudflareEnv {
   BETTER_AUTH_URL: string;
   WEB_ORIGIN: string;
   NEXT_PUBLIC_SYNC_URL: string;
+  APP_ENV: string;
+  EMAIL_FROM_ADDRESS: string;
   WORKSPACE_SYNC: DurableObjectNamespace /* WorkspaceSync from lyzy-sync */;
   AGENT: Fetcher /* lyzy */;
 }
@@ -33,6 +35,8 @@ declare namespace NodeJS {
       | "BETTER_AUTH_URL"
       | "WEB_ORIGIN"
       | "NEXT_PUBLIC_SYNC_URL"
+      | "APP_ENV"
+      | "EMAIL_FROM_ADDRESS"
     >
   > {}
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ReactFlowProvider } from "@xyflow/react";
-import { SpinnerGap, X } from "@phosphor-icons/react";
+import { SpinnerGapIcon, XIcon } from "@phosphor-icons/react";
 import { AddMembersPanel } from "@/components/os/AddMembersPanel";
 import { CanvasToolbar, type CanvasTool } from "@/components/os/CanvasToolbar";
 import { AddMemberButton, TeamPresence } from "@/components/os/TeamPresence";
@@ -23,7 +23,6 @@ type Point = { x: number; y: number };
 
 type Props = {
   projectId: string;
-  /** Workspace id or slug from the URL. */
   workspaceId: string;
 };
 
@@ -38,7 +37,6 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingDocPos = useRef<Point | null>(null);
-  /** real id → optimistic id it replaced, so the open panel keeps its state across the swap. */
   const [panelAliases, setPanelAliases] = useState<Record<string, string>>({});
 
   const onNodeConfirmed = useCallback((optimisticId: string, realId: string) => {
@@ -75,7 +73,6 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
   const agentWorking = useAgentStatus(projectId);
   const { peers, publishPresence } = sync;
 
-  // A selection whose node disappeared (deleted here or remotely) simply resolves to nothing.
   const selected = useMemo(
     () => board?.nodes.find((n) => n.id === selectedId) ?? null,
     [board?.nodes, selectedId],
@@ -168,7 +165,7 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
   if (!board) {
     return (
       <div className="flex h-full items-center justify-center" role="status" aria-label="Loading">
-        <SpinnerGap size={24} className="animate-spin text-ink-tertiary" />
+        <SpinnerGapIcon size={24} className="animate-spin text-ink-tertiary" />
       </div>
     );
   }
@@ -214,7 +211,7 @@ export function WorkspaceBoard({ projectId, workspaceId: routeWorkspaceId }: Pro
             onClick={dismissActionError}
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] hover:bg-pale-red-ink/10"
           >
-            <X size={11} weight="bold" />
+            <XIcon size={11} weight="bold" />
           </button>
         </div>
       ) : null}

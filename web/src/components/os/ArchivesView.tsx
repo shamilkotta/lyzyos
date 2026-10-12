@@ -1,6 +1,11 @@
 "use client";
 
-import { Archive, ArrowCounterClockwise, CirclesFour, SpinnerGap } from "@phosphor-icons/react";
+import {
+  ArchiveIcon,
+  ArrowCounterClockwiseIcon,
+  CirclesFourIcon,
+  SpinnerGapIcon,
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { formatLongDate } from "@/lib/format";
 import { useArchivedProjects, useSetProjectArchived } from "@/lib/queries/projects";
@@ -18,7 +23,7 @@ function UnarchiveButton({ projectId }: { projectId: string }) {
       }}
       className="flex items-center gap-1.5 rounded-[6px] border border-border px-2.5 py-1 text-[12px] text-ink-secondary transition-colors hover:border-border-strong hover:text-ink disabled:opacity-50"
     >
-      <ArrowCounterClockwise size={12} />
+      <ArrowCounterClockwiseIcon size={12} />
       {isPending ? "Restoring…" : "Restore"}
     </button>
   );
@@ -51,12 +56,12 @@ export function ArchivesView() {
 
         {isLoading ? (
           <div className="flex items-center gap-2 text-[13px] text-ink-tertiary">
-            <SpinnerGap size={14} className="animate-spin" />
+            <SpinnerGapIcon size={14} className="animate-spin" />
             Loading archived projects…
           </div>
         ) : projects.length === 0 ? (
           <div className="fade-up flex flex-col items-center gap-3 rounded-[12px] border border-dashed border-border px-8 py-16 text-center">
-            <Archive size={32} className="text-ink-tertiary" />
+            <ArchiveIcon size={32} className="text-ink-tertiary" />
             <p className="text-[14px] text-ink-secondary">No archived projects.</p>
           </div>
         ) : (
@@ -69,7 +74,11 @@ export function ArchivesView() {
                     onClick={() => router.push(routes.project(project.id))}
                     className="flex min-w-0 items-center gap-2.5 text-left"
                   >
-                    <CirclesFour size={14} className="shrink-0 text-ink-tertiary" weight="bold" />
+                    <CirclesFourIcon
+                      size={14}
+                      className="shrink-0 text-ink-tertiary"
+                      weight="bold"
+                    />
                     <div className="min-w-0">
                       <span className="block truncate text-[13px] font-medium text-ink">
                         {project.name}

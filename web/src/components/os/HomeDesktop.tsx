@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  Archive,
-  CirclesFour,
-  DotOutline,
-  SpinnerGap,
-  ArrowRight,
-  Clock,
+  ArchiveIcon,
+  CirclesFourIcon,
+  DotOutlineIcon,
+  SpinnerGapIcon,
+  ArrowRightIcon,
+  ClockIcon,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
@@ -24,7 +24,6 @@ const LIST_PROJECT_COUNT = 8;
 export function HomeDesktop() {
   const router = useRouter();
   const { data: liveProjects = [], isLoading, isFetching } = useProjects();
-  // The API returns projects most recently updated first.
   const recentProjects = liveProjects.slice(0, RECENT_PROJECT_COUNT);
   const completeCount = liveProjects.filter((p) => p.status !== "in_progress").length;
   const progress = liveProjects.length
@@ -66,7 +65,7 @@ export function HomeDesktop() {
 
         {isLoading ? (
           <div className="mb-10 flex items-center gap-2 text-[13px] text-ink-tertiary">
-            <SpinnerGap size={14} className="animate-spin" />
+            <SpinnerGapIcon size={14} className="animate-spin" />
             Loading projects…
           </div>
         ) : null}
@@ -101,7 +100,7 @@ export function HomeDesktop() {
                   >
                     <div className="mb-4 flex items-center justify-between">
                       <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-canvas text-ink">
-                        <CirclesFour size={15} weight="bold" />
+                        <CirclesFourIcon size={15} weight="bold" />
                       </span>
                       <StatusBadge tone={projectStatusTone(project.status)}>
                         {projectStatusLabel(project.status)}
@@ -139,7 +138,7 @@ export function HomeDesktop() {
                   onClick={() => router.push(routes.archives)}
                   className="flex items-center gap-1.5 text-[11px] text-ink-tertiary transition-colors hover:text-ink"
                 >
-                  <Archive size={12} />
+                  <ArchiveIcon size={12} />
                   Archives
                 </button>
               </div>
@@ -152,7 +151,7 @@ export function HomeDesktop() {
                       className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-soft"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <CirclesFour
+                        <CirclesFourIcon
                           size={14}
                           className="shrink-0 text-ink-tertiary"
                           weight="bold"
@@ -163,13 +162,13 @@ export function HomeDesktop() {
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
                         <span className="flex items-center gap-1 text-[11px] text-ink-tertiary">
-                          <Clock size={11} />
+                          <ClockIcon size={11} />
                           {formatRelative(project.updatedAt)}
                         </span>
                         <StatusBadge tone={projectStatusTone(project.status)}>
                           {projectStatusLabel(project.status)}
                         </StatusBadge>
-                        <ArrowRight
+                        <ArrowRightIcon
                           size={12}
                           className="text-ink-tertiary opacity-0 transition-opacity group-hover:opacity-100"
                         />
@@ -242,9 +241,9 @@ function SpacePreview({ panes }: { panes: [string, string, string] }) {
   return (
     <div className="mb-3 overflow-hidden rounded-[8px] border border-border bg-canvas">
       <div className="flex h-6 items-center gap-1 border-b border-border bg-surface px-2">
-        <DotOutline size={14} weight="fill" className="text-border-strong" />
-        <DotOutline size={14} weight="fill" className="text-border-strong" />
-        <DotOutline size={14} weight="fill" className="text-border-strong" />
+        <DotOutlineIcon size={14} weight="fill" className="text-border-strong" />
+        <DotOutlineIcon size={14} weight="fill" className="text-border-strong" />
+        <DotOutlineIcon size={14} weight="fill" className="text-border-strong" />
       </div>
       <div className="grid h-20 grid-cols-3 gap-1.5 p-2">
         {panes.map((pane) => (

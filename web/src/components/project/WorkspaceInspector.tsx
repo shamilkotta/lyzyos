@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Users } from "@phosphor-icons/react";
+import { ArrowRightIcon, UsersIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { MemberAvatar } from "@/components/canvas/nodes/CanvasNodes";
 import { FloatingPanel } from "@/components/os/FloatingPanel";
@@ -67,7 +67,7 @@ export function WorkspaceInspector({ workspace, projectName, onOpen, onClose }: 
 
           <section>
             <div className="mb-2 flex items-center gap-1.5 text-ink-tertiary">
-              <Users size={13} weight="bold" />
+              <UsersIcon size={13} weight="bold" />
               <span className="text-[11px] font-medium uppercase tracking-[0.05em]">
                 Team in this room
               </span>
@@ -93,7 +93,7 @@ export function WorkspaceInspector({ workspace, projectName, onOpen, onClose }: 
 
           <Button onClick={onOpen}>
             Enter workspace
-            <ArrowRight size={14} weight="bold" />
+            <ArrowRightIcon size={14} weight="bold" />
           </Button>
         </div>
       </FloatingPanel>

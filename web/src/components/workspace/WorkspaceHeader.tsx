@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { CaretDown, CaretLeft, CaretUp, Warning } from "@phosphor-icons/react";
+import { CaretDownIcon, CaretLeftIcon, CaretUpIcon, WarningIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -51,12 +51,12 @@ function AttentionBanner({ text }: { text: string }) {
         expanded ? "items-start py-2" : "h-8 items-center",
       )}
     >
-      <Warning size={13} weight="bold" className="shrink-0" />
+      <WarningIcon size={13} weight="bold" className="shrink-0" />
       <span className={clsx("min-w-0 flex-1", !expanded && "line-clamp-1")}>{text}</span>
       {expanded ? (
-        <CaretUp size={12} weight="bold" className="mt-0.5 shrink-0 opacity-70" />
+        <CaretUpIcon size={12} weight="bold" className="mt-0.5 shrink-0 opacity-70" />
       ) : (
-        <CaretDown size={12} weight="bold" className="shrink-0 opacity-70" />
+        <CaretDownIcon size={12} weight="bold" className="shrink-0 opacity-70" />
       )}
     </button>
   );
@@ -68,7 +68,6 @@ type Props = {
   attention: string | null;
   syncStatus: SyncConnectionStatus;
   onBack: () => void;
-  /** Presence stack + add-member control. */
   presence: ReactNode;
 };
 
@@ -76,7 +75,7 @@ export function WorkspaceHeader({ name, status, attention, syncStatus, onBack, p
   return (
     <div className="fade-up pointer-events-none absolute left-4 top-4 z-10 flex max-w-[calc(100%-2rem)] flex-wrap items-start gap-2">
       <Button variant="secondary" className="pointer-events-auto h-8 shrink-0" onClick={onBack}>
-        <CaretLeft size={14} weight="bold" />
+        <CaretLeftIcon size={14} weight="bold" />
         Campaign graph
       </Button>
 

@@ -1,2 +1,2 @@
-INTERNAL_SECRET=dev-secret-change-in-prod
+INTERNAL_SECRET=replace-with-a-random-internal-secret
 AGENT_ID=123
