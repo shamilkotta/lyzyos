@@ -45,6 +45,7 @@ next-env.d.ts
 # local agent / skill caches
 .agents/
 .pi/
+skills-lock.json
 
 # wrangler
 .wrangler/
