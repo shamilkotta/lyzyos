@@ -1,128 +1,67 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { isTypingTarget } from "@/lib/dom";
+import { useProject, useProjectBoard } from "@/lib/queries/projects";
+import { parseProjectPath, RAIL_ROUTES, railFromPathname, routes } from "@/lib/routes";
+import { CommandPalette } from "./CommandPalette";
 import { MenuBar } from "./MenuBar";
 import { SpaceRail } from "./SpaceRail";
-import { CommandPalette } from "./CommandPalette";
-import { AttentionTray } from "./AttentionTray";
-import { attentionQueue } from "@/lib/data";
-import { useProjects, useProjectBoard } from "@/lib/queries/projects";
-import { railFromPathname, routeForRail, routes, type RailId } from "@/lib/routes";
-
-type View = "home" | "campaign" | "workspace";
-
-function viewFromPathname(pathname: string): View {
-  if (/\/projects\/[^/]+\/workspaces\//.test(pathname)) return "workspace";
-  if (pathname.startsWith("/projects/") || pathname.startsWith("/spaces/")) return "campaign";
-  return "home";
-}
-
-function projectIdFromPathname(pathname: string): string | null {
-  const match = pathname.match(/^\/projects\/([^/]+)/);
-  return match?.[1] ?? null;
-}
-
-function workspaceIdFromPathname(pathname: string): string | null {
-  const match = pathname.match(/^\/projects\/[^/]+\/workspaces\/([^/]+)/);
-  return match?.[1] ?? null;
-}
 
 export function OsShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const view = viewFromPathname(pathname);
-  const rail = railFromPathname(pathname);
-  const activeProjectId = projectIdFromPathname(pathname);
-  const activeWorkspaceId = workspaceIdFromPathname(pathname);
-
+  const { projectId, workspaceId } = parseProjectPath(pathname);
   const [commandOpen, setCommandOpen] = useState(false);
-  const [attentionOpen, setAttentionOpen] = useState(false);
 
-  const { data: liveProjects = [] } = useProjects({
-    refetchInterval: (query) => {
-      if (!activeProjectId) return false;
-      if (view !== "campaign" && view !== "workspace") return false;
-      const project = query.state.data?.find((p) => p.id === activeProjectId);
-      if (!project?.name || project.name === "Untitled project") return 2500;
-      return false;
-    },
-  });
-
-  const { data: workspaceBoard } = useProjectBoard(activeProjectId ?? "", {
-    enabled: view === "workspace" && Boolean(activeProjectId) && Boolean(activeWorkspaceId),
-    workspaceId: activeWorkspaceId,
-  });
-
-  const activeProjectName = liveProjects.find((p) => p.id === activeProjectId)?.name ?? "";
-  const activeWorkspaceName = workspaceBoard?.workspace.name;
-  const focusKickoff = useCallback(() => {
-    router.push(routes.projects);
-  }, [router]);
-
-  const goHome = useCallback(() => {
-    router.push(routes.projects);
-  }, [router]);
-
-  const backToProjectGraph = useCallback(() => {
-    if (activeProjectId) {
-      router.push(routes.project(activeProjectId));
-    }
-  }, [activeProjectId, router]);
+  // Shares cache entries with the project and workspace views, so these cost no extra requests.
+  const { data: project } = useProject(projectId);
+  const { data: board } = useProjectBoard(projectId, workspaceId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setCommandOpen((v) => !v);
+        return;
       }
-      if (e.key === "Escape" && view === "workspace" && activeProjectId) {
-        backToProjectGraph();
+      // Escape leaves a workspace — unless something else (a dialog, menu, or input) owns it.
+      if (
+        e.key === "Escape" &&
+        projectId &&
+        workspaceId &&
+        !commandOpen &&
+        !e.defaultPrevented &&
+        !isTypingTarget(e.target)
+      ) {
+        router.push(routes.project(projectId));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeProjectId, backToProjectGraph, view]);
-
-  const onRailChange = (id: RailId) => {
-    router.push(routeForRail(id));
-  };
+  }, [commandOpen, projectId, router, workspaceId]);
 
   return (
     <div className="os-grain flex h-dvh flex-col bg-canvas text-ink">
       <MenuBar
-        view={view}
-        spaceName={activeProjectId ? activeProjectName || undefined : undefined}
-        workspaceName={activeWorkspaceName}
-        onHome={goHome}
+        projectName={project?.name}
+        workspaceName={workspaceId ? (board?.workspace.name ?? "") : undefined}
+        onBackToProject={projectId ? () => router.push(routes.project(projectId)) : undefined}
+        onHome={() => router.push(routes.projects)}
         onCommand={() => setCommandOpen(true)}
-        onToggleAttention={() => setAttentionOpen((v) => !v)}
-        attentionCount={attentionQueue.length}
-        onBackToOverview={view === "workspace" ? backToProjectGraph : undefined}
       />
 
       <div className="relative flex min-h-0 flex-1">
-        <SpaceRail active={rail} onChange={onRailChange} onNew={focusKickoff} />
+        <SpaceRail
+          active={railFromPathname(pathname)}
+          onChange={(rail) => router.push(RAIL_ROUTES[rail])}
+          onNew={() => router.push(routes.projects)}
+        />
         <main className="relative min-w-0 flex-1">{children}</main>
       </div>
 
-      <AttentionTray
-        open={attentionOpen}
-        onClose={() => setAttentionOpen(false)}
-        onSelect={(item) => {
-          router.push(routes.space(item.campaignId));
-          setAttentionOpen(false);
-        }}
-      />
-
-      <CommandPalette
-        open={commandOpen}
-        onClose={() => setCommandOpen(false)}
-        onNewSpace={focusKickoff}
-        onOpenCampaign={() => router.push(routes.space("secureedge"))}
-        onShowAgents={() => router.push(routes.members)}
-        onFocusAttention={() => setAttentionOpen(true)}
-      />
+      {commandOpen ? <CommandPalette onClose={() => setCommandOpen(false)} /> : null}
     </div>
   );
 }

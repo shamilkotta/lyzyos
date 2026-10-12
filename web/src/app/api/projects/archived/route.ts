@@ -1,11 +1,7 @@
 import { listArchivedProjectsForUser } from "@lyzyos/db";
-import { getEnv } from "@/server/env";
-import { requireSession } from "@/server/session";
-import { NextResponse } from "next/server";
+import { apiContext, json, route } from "@/server/http";
 
-export async function GET() {
-  const session = await requireSession();
-  const env = await getEnv();
-  const archivedProjects = await listArchivedProjectsForUser(env.DB, session.user.id);
-  return NextResponse.json({ data: archivedProjects }, { status: 200 });
-}
+export const GET = route(async () => {
+  const { session, env } = await apiContext();
+  return json(await listArchivedProjectsForUser(env.DB, session.user.id));
+});

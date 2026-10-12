@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CaretDown, CaretUp, X } from "@phosphor-icons/react";
 import clsx from "clsx";
 
@@ -34,9 +34,6 @@ export function FloatingPanel({
 }: Props) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
-  const isDragging = useRef(false);
-  const dragStartX = useRef(0);
-  const dragStartWidth = useRef(DEFAULT_WIDTH);
 
   useEffect(() => {
     if (scrollToBottomKey === undefined || collapsed) return;
@@ -44,30 +41,23 @@ export function FloatingPanel({
     if (body) body.scrollTo({ top: body.scrollHeight, behavior: "smooth" });
   }, [scrollToBottomKey, collapsed]);
 
-  const onHandleMouseDown = useCallback((e: React.MouseEvent) => {
+  // Listeners exist only for the duration of a drag rather than for the panel's lifetime.
+  const startResize = (e: React.PointerEvent) => {
     e.preventDefault();
-    isDragging.current = true;
-    dragStartX.current = e.clientX;
-    dragStartWidth.current = width;
-  }, [width]);
-
-  useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
-      // dragging left (negative delta) increases width
-      const delta = dragStartX.current - e.clientX;
-      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragStartWidth.current + delta)));
+    const startX = e.clientX;
+    const startWidth = width;
+    const onMove = (event: PointerEvent) => {
+      // The handle is on the left edge, so dragging left (negative delta) widens the panel.
+      const next = startWidth + (startX - event.clientX);
+      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, next)));
     };
-    const onMouseUp = () => {
-      isDragging.current = false;
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
     };
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-  }, []);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
 
   return (
     <aside
@@ -83,7 +73,8 @@ export function FloatingPanel({
       <div
         role="separator"
         aria-orientation="vertical"
-        onMouseDown={onHandleMouseDown}
+        aria-label="Resize panel"
+        onPointerDown={startResize}
         className="group absolute bottom-0 left-0 top-0 z-10 w-2 cursor-col-resize"
       >
         <div className="absolute bottom-2 left-[3px] top-2 w-px rounded-full bg-transparent transition-colors group-hover:bg-ink/25" />

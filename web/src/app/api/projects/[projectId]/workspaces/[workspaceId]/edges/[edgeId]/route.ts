@@ -1,24 +1,25 @@
-import { findSessionWorkspace } from "@/server/workspace";
-import { clientIdFromRequest, publishEdgeRemoved } from "@/server/sync/publish";
 import { deleteEdge, touchProject } from "@lyzyos/db";
-import { NextResponse } from "next/server";
+import { clientIdFromRequest, HttpError, json, route } from "@/server/http";
+import { publishSyncEvent } from "@/server/sync/publish";
+import { requireWorkspace } from "@/server/workspace";
 
 type Params = { params: Promise<{ projectId: string; workspaceId: string; edgeId: string }> };
 
-export async function DELETE(request: Request, { params }: Params) {
+export const DELETE = route<Params>(async (request, { params }) => {
   const { projectId, workspaceId, edgeId } = await params;
-  const { env, workspace } = await findSessionWorkspace({ projectId, workspaceId });
-  if (!workspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  }
+  const { env, workspace } = await requireWorkspace({ projectId, workspaceId });
 
   const result = await deleteEdge(env.DB, { edgeId, workspaceId: workspace.id });
+  if (!result.success) throw new HttpError(500, "Failed to delete edge");
 
-  if (!result.success) {
-    return NextResponse.json({ error: "Failed to delete edge" }, { status: 500 });
-  }
-
-  await touchProject(env.DB, projectId);
-  await publishEdgeRemoved(env, workspace.id, edgeId, clientIdFromRequest(request));
-  return NextResponse.json({ data: { ok: true } }, { status: 200 });
-}
+  await Promise.all([
+    touchProject(env.DB, projectId),
+    publishSyncEvent(
+      env,
+      workspace.id,
+      { type: "edge.removed", edgeId },
+      clientIdFromRequest(request),
+    ),
+  ]);
+  return json({ ok: true });
+});

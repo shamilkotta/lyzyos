@@ -1,53 +1,32 @@
 import { getUserById, listUsers } from "@lyzyos/db";
-import { getAuth } from "@/server/auth";
-import { getEnv } from "@/server/env";
-import { requireSession } from "@/server/session";
 import { tryCatch } from "@lyzyos/utils";
 import { headers } from "next/headers";
-import { NextResponse } from "next/server";
 import { z } from "zod";
-
-const memberRoles = ["user", "admin", "agent"] as const;
+import { memberRoles } from "@/lib/roles";
+import { routes } from "@/lib/routes";
+import { getAuth } from "@/server/auth";
+import { apiContext, HttpError, json, readJson, route } from "@/server/http";
 
 const createMemberSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  email: z.string().trim().email(),
+  email: z.string().trim().pipe(z.email()),
   role: z.enum(memberRoles).default("user"),
 });
 
-export async function GET() {
-  await requireSession();
-  const env = await getEnv();
+export const GET = route(async () => {
+  const { env } = await apiContext();
   const users = await listUsers(env.DB);
+  return json({ users: users.map((u) => ({ ...u, createdAt: u.createdAt.getTime() })) });
+});
 
-  return NextResponse.json(
-    { data: { users: users.map((u) => ({ ...u, createdAt: u.createdAt.getTime() })) } },
-    { status: 200 },
-  );
-}
-
-export async function POST(request: Request) {
-  const session = await requireSession();
-  const env = await getEnv();
+export const POST = route(async (request) => {
+  const { session, env } = await apiContext();
 
   // Only admins may add members (checked against the stored role, not just the session claim).
   const me = await getUserById(env.DB, session.user.id);
-  if (me?.role !== "admin") {
-    return NextResponse.json({ error: "Admins only" }, { status: 403 });
-  }
+  if (me?.role !== "admin") throw new HttpError(403, "Admins only");
 
-  const [raw, jsonError] = await tryCatch(request.json());
-  if (jsonError) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-
-  const parsed = createMemberSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: z.treeifyError(parsed.error) },
-      { status: 400 },
-    );
-  }
-
-  const { name, email, role } = parsed.data;
+  const { name, email, role } = await readJson(request, createMemberSchema);
   const auth = await getAuth();
   const isAgent = role === "agent";
 
@@ -67,29 +46,25 @@ export async function POST(request: Request) {
   );
   if (createError || !created?.user) {
     const message = createError instanceof Error ? createError.message : "Could not create member";
-    return NextResponse.json({ error: message }, { status: 400 });
+    throw new HttpError(400, message);
   }
 
   if (!isAgent) {
     await tryCatch(
-      auth.api.requestPasswordReset({
-        body: { email, redirectTo: "/reset-password" },
-      }),
+      auth.api.requestPasswordReset({ body: { email, redirectTo: routes.resetPassword } }),
     );
   }
 
-  return NextResponse.json(
+  return json(
     {
-      data: {
-        user: {
-          id: created.user.id,
-          name: created.user.name,
-          email: created.user.email,
-          role,
-          setupEmailSent: !isAgent,
-        },
+      user: {
+        id: created.user.id,
+        name: created.user.name,
+        email: created.user.email,
+        role,
+        setupEmailSent: !isAgent,
       },
     },
-    { status: 201 },
+    201,
   );
-}
+});

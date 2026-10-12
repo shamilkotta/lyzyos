@@ -4,114 +4,93 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Paperclip, FileText, X, SpinnerGap } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { useCreateProject } from "@/lib/queries/projects";
-import { PROJECT_DOC_ACCEPT, filterAllowedProjectDocs } from "@/lib/docs";
 import clsx from "clsx";
+import { UNTITLED_PROJECT } from "@/lib/constants";
+import {
+  filterAllowedProjectDocs,
+  MAX_KICKOFF_FILES,
+  MAX_UPLOAD_BYTES,
+  PROJECT_DOC_ACCEPT,
+} from "@/lib/docs";
+import { formatSize } from "@/lib/format";
+import { useCreateProject } from "@/lib/queries/projects";
 
-type Attachment = {
-  id: string;
-  name: string;
-  sizeLabel: string;
-  file: File;
-};
+type Attachment = { id: string; file: File };
 
 type Props = {
-  onCreated: (projectId: string, projectName: string, workspaceId: string) => void;
-  focusToken?: number;
+  onOpen: (projectId: string, workspaceId: string) => void;
 };
 
-function formatSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-export function KickoffComposer({ onCreated, focusToken }: Props) {
+export function KickoffComposer({ onOpen }: Props) {
   const createProject = useCreateProject();
   const [brief, setBrief] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [phase, setPhase] = useState<"compose" | "analyzing" | "ready">("compose");
-  const [error, setError] = useState<string | null>(null);
-  const [createdName, setCreatedName] = useState("");
-  const [createdId, setCreatedId] = useState("");
-  const [createdWorkspaceId, setCreatedWorkspaceId] = useState("");
+  const [created, setCreated] = useState<{ projectId: string; workspaceId: string } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (focusToken == null) return;
-    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    textareaRef.current?.focus();
-  }, [focusToken]);
+  const phase = created ? "ready" : createProject.isPending ? "analyzing" : "compose";
+  const error = notice ?? createProject.error?.message ?? null;
 
+  // Grow with the content up to 40% of the viewport.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    const maxH = window.innerHeight * 0.4;
-    el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, window.innerHeight * 0.4)}px`;
   }, [brief]);
 
   const addFiles = (files: FileList | File[]) => {
-    const allowed = filterAllowedProjectDocs(files);
-    if (allowed.length === 0) {
-      setError("Only images and PDFs are supported.");
-      return;
-    }
-    if (allowed.length < Array.from(files).length) {
-      setError("Some files were skipped — only images and PDFs are supported.");
+    const all = Array.from(files);
+    const allowed = filterAllowedProjectDocs(all);
+    const room = MAX_KICKOFF_FILES - attachments.length;
+    const accepted = allowed.slice(0, Math.max(room, 0));
+
+    if (accepted.length < all.length) {
+      setNotice(
+        `Some files were skipped — images and PDFs up to ${formatSize(MAX_UPLOAD_BYTES)}, at most ${MAX_KICKOFF_FILES} files.`,
+      );
     } else {
-      setError(null);
+      setNotice(null);
     }
-    const next = allowed.map((file) => ({
-      id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
-      name: file.name,
-      sizeLabel: formatSize(file.size),
-      file,
-    }));
+
     setAttachments((prev) => {
-      const names = new Set(prev.map((p) => p.name));
-      return [...prev, ...next.filter((f) => !names.has(f.name))];
+      const names = new Set(prev.map((a) => a.file.name));
+      const next = accepted
+        .filter((file) => !names.has(file.name))
+        .map((file) => ({ id: crypto.randomUUID(), file }));
+      return [...prev, ...next];
     });
   };
 
-  const canSubmit = brief.trim().length > 0;
+  const canSubmit = brief.trim().length > 0 && phase === "compose";
 
-  const submit = async () => {
-    if (!canSubmit || phase !== "compose" || createProject.isPending) return;
-    setPhase("analyzing");
-    setError(null);
-    try {
-      const result = await createProject.mutateAsync({
-        brief: brief.trim(),
-        files: attachments.map((a) => a.file),
-      });
-      setCreatedId(result.projectId);
-      setCreatedWorkspaceId(result.workspaceId);
-      setCreatedName("Untitled project");
-      setPhase("ready");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not start project.");
-      setPhase("compose");
-    }
+  const submit = () => {
+    if (!canSubmit) return;
+    setNotice(null);
+    createProject.mutate(
+      { brief: brief.trim(), files: attachments.map((a) => a.file) },
+      { onSuccess: setCreated },
+    );
   };
 
   const reset = () => {
-    setPhase("compose");
     setBrief("");
     setAttachments([]);
-    setError(null);
-    setCreatedId("");
-    setCreatedWorkspaceId("");
-    setCreatedName("");
+    setNotice(null);
+    setCreated(null);
+    createProject.reset();
   };
 
   return (
-    <div ref={rootRef} className="fade-up space-y-3">
+    <div className="fade-up space-y-3">
       {error ? (
-        <div className="rounded-[8px] border border-pale-red-ink/20 bg-pale-red px-3 py-2 text-[13px] text-pale-red-ink">
+        <div
+          role="alert"
+          className="rounded-[8px] border border-pale-red-ink/20 bg-pale-red px-3 py-2 text-[13px] text-pale-red-ink"
+        >
           {error}
         </div>
       ) : null}
@@ -126,13 +105,13 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
         </div>
       ) : null}
 
-      {phase === "ready" ? (
+      {created ? (
         <div className="rounded-[12px] border border-border bg-surface p-4">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <StatusBadge tone="info">Project created</StatusBadge>
               <h2 className="mt-2 text-[18px] font-medium tracking-[-0.02em] text-ink">
-                {createdName}
+                {UNTITLED_PROJECT}
               </h2>
               <p className="mt-1 text-[12px] text-ink-secondary">
                 Lyzy is reading the brief in the background. Open the workspace to watch the board
@@ -152,10 +131,7 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
             <Button variant="secondary" onClick={reset}>
               Stay on home
             </Button>
-            <Button
-              onClick={() => onCreated(createdId, createdName, createdWorkspaceId)}
-              disabled={!createdWorkspaceId}
-            >
+            <Button onClick={() => onOpen(created.projectId, created.workspaceId)}>
               Open workspace
             </Button>
           </div>
@@ -178,7 +154,8 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
           }}
           onDragLeave={(e) => {
             e.preventDefault();
-            setDragging(false);
+            // dragleave also fires when crossing into a child; only reset when leaving the box.
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
           }}
           onDrop={(e) => {
             e.preventDefault();
@@ -203,7 +180,7 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
-                  void submit();
+                  submit();
                 }
               }}
               placeholder="Launch SecureEdge across US, UK and Germany for enterprise CTOs…"
@@ -212,20 +189,20 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
 
             {attachments.length > 0 ? (
               <ul className="mt-2 flex flex-wrap gap-1.5">
-                {attachments.map((file) => (
+                {attachments.map(({ id, file }) => (
                   <li
-                    key={file.id}
+                    key={id}
                     className="inline-flex max-w-full items-center gap-1.5 rounded-[6px] border border-border bg-canvas py-1 pl-2 pr-1 text-[12px] text-ink"
                   >
                     <FileText size={13} weight="bold" className="shrink-0 text-ink-tertiary" />
                     <span className="truncate">{file.name}</span>
                     <span className="shrink-0 font-mono text-[10px] text-ink-tertiary">
-                      {file.sizeLabel}
+                      {formatSize(file.size)}
                     </span>
                     <button
                       type="button"
                       aria-label={`Remove ${file.name}`}
-                      onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== file.id))}
+                      onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== id))}
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-ink-tertiary hover:bg-surface-soft hover:text-ink"
                     >
                       <X size={11} weight="bold" />
@@ -271,7 +248,7 @@ export function KickoffComposer({ onCreated, focusToken }: Props) {
             <button
               type="button"
               disabled={!canSubmit}
-              onClick={() => void submit()}
+              onClick={submit}
               className={clsx(
                 "flex h-8 items-center gap-1.5 rounded-[6px] px-3 text-[12px] font-medium transition-all duration-200 active:scale-[0.98]",
                 canSubmit

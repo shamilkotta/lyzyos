@@ -1,76 +1,51 @@
-import { findSessionWorkspace } from "@/server/workspace";
-import { clientIdFromRequest, publishEdgeUpserted } from "@/server/sync/publish";
 import { getNodeInWorkspace, insertEdge, touchProject } from "@lyzyos/db";
 import { tryCatch } from "@lyzyos/utils";
-import { NextResponse } from "next/server";
 import { z } from "zod";
+import { clientIdFromRequest, HttpError, json, readJson, route } from "@/server/http";
+import { publishSyncEvent } from "@/server/sync/publish";
+import { requireWorkspace } from "@/server/workspace";
 
 type Params = { params: Promise<{ projectId: string; workspaceId: string }> };
 
-const createEdgeBodySchema = z
+const createEdgeSchema = z
   .object({
     sourceId: z.string().trim().min(1),
     targetId: z.string().trim().min(1),
   })
-  .superRefine((data, ctx) => {
-    if (data.sourceId === data.targetId) {
-      ctx.addIssue({
-        path: ["targetId"],
-        code: "invalid_value",
-        message: "Cannot connect a node to itself.",
-        values: [data.sourceId, data.targetId],
-      });
-    }
+  .refine((data) => data.sourceId !== data.targetId, {
+    path: ["targetId"],
+    message: "Cannot connect a node to itself.",
   });
 
-export async function POST(request: Request, { params }: Params) {
+export const POST = route<Params>(async (request, { params }) => {
   const { projectId, workspaceId } = await params;
-  const [data, bodyError] = await tryCatch(request.json());
-  if (bodyError) {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  const { env, workspace } = await requireWorkspace({ projectId, workspaceId });
+  const { sourceId, targetId } = await readJson(request, createEdgeSchema);
 
-  const parsed = createEdgeBodySchema.safeParse(data);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
-  }
-
-  const { env, workspace } = await findSessionWorkspace({ projectId, workspaceId });
-  if (!workspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  }
-
-  const source = await getNodeInWorkspace(env.DB, {
-    nodeId: parsed.data.sourceId,
-    workspaceId: workspace.id,
-  });
-  const target = await getNodeInWorkspace(env.DB, {
-    nodeId: parsed.data.targetId,
-    workspaceId: workspace.id,
-  });
-  if (!source || !target) {
-    return NextResponse.json({ error: "Invalid node ids." }, { status: 400 });
-  }
+  const [source, target] = await Promise.all([
+    getNodeInWorkspace(env.DB, { nodeId: sourceId, workspaceId: workspace.id }),
+    getNodeInWorkspace(env.DB, { nodeId: targetId, workspaceId: workspace.id }),
+  ]);
+  if (!source || !target) throw new HttpError(400, "Invalid node ids.");
 
   const [result, insertError] = await tryCatch(
-    insertEdge(env.DB, {
-      workspaceId: workspace.id,
-      sourceId: parsed.data.sourceId,
-      targetId: parsed.data.targetId,
-    }),
+    insertEdge(env.DB, { workspaceId: workspace.id, sourceId, targetId }),
   );
   // The only expected failure is the (source, target) unique index.
   const edge = result?.[0];
-  if (insertError || !edge) {
-    return NextResponse.json({ error: "Edge already exists." }, { status: 409 });
-  }
+  if (insertError || !edge) throw new HttpError(409, "Edge already exists.");
 
-  await touchProject(env.DB, projectId);
-  await publishEdgeUpserted(
-    env,
-    workspace.id,
-    { id: edge.id, sourceId: edge.sourceId, targetId: edge.targetId },
-    clientIdFromRequest(request),
-  );
-  return NextResponse.json({ data: { edge } }, { status: 201 });
-}
+  await Promise.all([
+    touchProject(env.DB, projectId),
+    publishSyncEvent(
+      env,
+      workspace.id,
+      {
+        type: "edge.upserted",
+        edge: { id: edge.id, sourceId: edge.sourceId, targetId: edge.targetId },
+      },
+      clientIdFromRequest(request),
+    ),
+  ]);
+  return json({ edge }, 201);
+});

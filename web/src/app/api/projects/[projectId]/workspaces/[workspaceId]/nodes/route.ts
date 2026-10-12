@@ -1,7 +1,3 @@
-import { notifyAgent } from "@/server/agent";
-import { getExecutionContext } from "@/server/env";
-import { findSessionWorkspace } from "@/server/workspace";
-import { clientIdFromRequest, publishNodeUpserted } from "@/server/sync/publish";
 import {
   createCommentNode,
   createDocumentNode,
@@ -11,60 +7,43 @@ import {
   putObject,
   touchProject,
 } from "@lyzyos/db";
-import { tryCatch } from "@lyzyos/utils";
-import { NextResponse } from "next/server";
 import { z } from "zod";
+import { MAX_UPLOAD_BYTES } from "@/lib/docs";
+import { notifyAgent } from "@/server/agent";
+import { getExecutionContext } from "@/server/env";
+import { clientIdFromRequest, json, parseWith, readForm, route } from "@/server/http";
+import { publishSyncEvent } from "@/server/sync/publish";
+import { requireWorkspace } from "@/server/workspace";
 
 type Params = { params: Promise<{ projectId: string; workspaceId: string }> };
 
-const positionFields = {
+const placement = {
   title: z.string().trim().optional(),
-  x: z.coerce.number(),
-  y: z.coerce.number(),
+  x: z.coerce.number().finite(),
+  y: z.coerce.number().finite(),
 };
 
-const createNodeBodySchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("note"),
-    data: z.string().trim().default(""),
-    ...positionFields,
-  }),
-  z.object({
-    kind: z.literal("comment"),
-    data: z.string().trim().default(""),
-    ...positionFields,
-  }),
+const createNodeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("note"), data: z.string().trim().default(""), ...placement }),
+  z.object({ kind: z.literal("comment"), data: z.string().trim().default(""), ...placement }),
   z.object({
     kind: z.literal("doc"),
-    file: z.file(),
-    ...positionFields,
+    file: z.file().max(MAX_UPLOAD_BYTES, "File is too large"),
+    ...placement,
   }),
 ]);
 
-export async function POST(request: Request, { params }: Params) {
+export const POST = route<Params>(async (request, { params }) => {
   const { projectId, workspaceId } = await params;
-
-  const contentType = request.headers.get("Content-Type") ?? "";
-  if (!contentType.includes("multipart/form-data")) {
-    return NextResponse.json({ error: "Expected multipart/form-data" }, { status: 400 });
-  }
-
-  const [{ session, env, workspace: userWorkspace }, ctx] = await Promise.all([
-    findSessionWorkspace({ projectId, workspaceId }),
+  const [{ session, env, workspace }, ctx] = await Promise.all([
+    requireWorkspace({ projectId, workspaceId }),
     getExecutionContext(),
   ]);
-  if (!userWorkspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  }
 
-  const [form, formError] = await tryCatch(request.formData());
-  if (formError || !form) {
-    return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
-  }
-
+  const form = await readForm(request);
   // FormData returns null for absent fields; zod's optional/default only handle undefined.
   const field = (name: string) => form.get(name) ?? undefined;
-  const parsed = createNodeBodySchema.safeParse({
+  const body = parseWith(createNodeSchema, {
     kind: field("kind"),
     title: field("title"),
     data: field("data"),
@@ -72,83 +51,55 @@ export async function POST(request: Request, { params }: Params) {
     x: field("x"),
     y: field("y"),
   });
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: z.treeifyError(parsed.error) },
-      { status: 400 },
-    );
-  }
 
-  const body = parsed.data;
   const nodeId = crypto.randomUUID();
+  const base = {
+    id: nodeId,
+    workspaceId: workspace.id,
+    authorId: session.user.id,
+    title: body.title ?? "",
+    x: body.x,
+    y: body.y,
+  };
 
   if (body.kind === "doc") {
-    const raw = await body.file.arrayBuffer();
-    const bytes = new Uint8Array(raw);
+    const bytes = new Uint8Array(await body.file.arrayBuffer());
     const mime = body.file.type || "application/octet-stream";
-    const docId = crypto.randomUUID();
-    const key = docKey(projectId, docId, body.file.name);
+    const key = docKey(projectId, crypto.randomUUID(), body.file.name);
     await putObject(env.FILES, key, bytes, mime);
-
     await createDocumentNode(env.DB, {
-      id: nodeId,
-      workspaceId: userWorkspace.id,
-      authorId: session.user.id,
-      title: body.title ?? "",
-      x: body.x,
-      y: body.y,
+      ...base,
       name: body.file.name.trim(),
       mime,
       sizeBytes: bytes.byteLength,
       r2Key: key,
     });
   } else if (body.kind === "note") {
-    await createNoteNode(env.DB, {
-      id: nodeId,
-      workspaceId: userWorkspace.id,
-      authorId: session.user.id,
-      title: body.title ?? "",
-      x: body.x,
-      y: body.y,
-      data: body.data,
-    });
+    await createNoteNode(env.DB, { ...base, data: body.data });
   } else {
-    const { commentId } = await createCommentNode(env.DB, {
-      id: nodeId,
-      workspaceId: userWorkspace.id,
-      authorId: session.user.id,
-      title: body.title ?? "",
-      x: body.x,
-      y: body.y,
-      data: body.data,
-    });
-
+    const { commentId } = await createCommentNode(env.DB, { ...base, data: body.data });
     if (commentId) {
       notifyAgent(
         env,
         {
           projectId,
           threadId: nodeId,
-          workspaceId: userWorkspace.id,
-          message: [
-            {
-              id: commentId,
-              role: "user",
-              name: session.user.name,
-              message: body.data.trim(),
-            },
-          ],
+          workspaceId: workspace.id,
+          message: [{ id: commentId, role: "user", name: session.user.name, message: body.data }],
         },
         ctx,
       );
     }
   }
 
-  await touchProject(env.DB, projectId);
-
-  const node = await getNodeDto(env.DB, nodeId);
+  const [node] = await Promise.all([getNodeDto(env.DB, nodeId), touchProject(env.DB, projectId)]);
   if (node) {
-    await publishNodeUpserted(env, userWorkspace.id, node, clientIdFromRequest(request));
+    await publishSyncEvent(
+      env,
+      workspace.id,
+      { type: "node.upserted", node },
+      clientIdFromRequest(request),
+    );
   }
-  return NextResponse.json({ data: node }, { status: 201 });
-}
+  return json(node, 201);
+});

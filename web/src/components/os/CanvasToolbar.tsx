@@ -1,124 +1,53 @@
 "use client";
 
 import { useEffect } from "react";
-import {
-  Cursor,
-  HandGrabbing,
-  ChatCircleText,
-  NoteBlank,
-  WarningCircle,
-  ListChecks,
-  Path,
-  LinkSimple,
-  FileText,
-} from "@phosphor-icons/react";
 import clsx from "clsx";
+import { isTypingTarget } from "@/lib/dom";
+import { PLACEMENT_TOOLS, TOOLS, type CanvasTool } from "./canvasTools";
 
-export type CanvasTool =
-  | "select"
-  | "hand"
-  | "connect"
-  | "comment"
-  | "note"
-  | "doc"
-  | "instruction"
-  | "work"
-  | "blocker";
-
-type ToolDef = {
-  id: CanvasTool;
-  label: string;
-  shortcut: string;
-  icon: typeof Cursor;
-};
+export type { CanvasTool };
 
 type Props = {
   tool: CanvasTool;
   onTool: (tool: CanvasTool) => void;
-  mode: "overview" | "branch" | "workspace";
+  mode: keyof typeof TOOLS;
 };
-
-const TOOL_SHORTCUTS: Record<CanvasTool, string> = {
-  select: "s",
-  hand: "p",
-  connect: "l",
-  comment: "c",
-  note: "n",
-  doc: "d",
-  instruction: "i",
-  work: "w",
-  blocker: "b",
-};
-
-const branchTools: ToolDef[] = [
-  { id: "select", label: "Select", shortcut: TOOL_SHORTCUTS.select, icon: Cursor },
-  { id: "hand", label: "Pan", shortcut: TOOL_SHORTCUTS.hand, icon: HandGrabbing },
-  { id: "connect", label: "Connect", shortcut: TOOL_SHORTCUTS.connect, icon: LinkSimple },
-  { id: "comment", label: "Comment", shortcut: TOOL_SHORTCUTS.comment, icon: ChatCircleText },
-  { id: "note", label: "Note", shortcut: TOOL_SHORTCUTS.note, icon: NoteBlank },
-  { id: "instruction", label: "Instruction", shortcut: TOOL_SHORTCUTS.instruction, icon: Path },
-  { id: "work", label: "Work", shortcut: TOOL_SHORTCUTS.work, icon: ListChecks },
-  { id: "blocker", label: "Blocker", shortcut: TOOL_SHORTCUTS.blocker, icon: WarningCircle },
-];
-
-const overviewTools = branchTools.filter((t) => ["select", "hand"].includes(t.id));
-
-const workspaceTools: ToolDef[] = [
-  { id: "select", label: "Select", shortcut: TOOL_SHORTCUTS.select, icon: Cursor },
-  { id: "hand", label: "Pan", shortcut: TOOL_SHORTCUTS.hand, icon: HandGrabbing },
-  { id: "comment", label: "Comment", shortcut: TOOL_SHORTCUTS.comment, icon: ChatCircleText },
-  { id: "note", label: "Note", shortcut: TOOL_SHORTCUTS.note, icon: NoteBlank },
-  { id: "doc", label: "Document", shortcut: TOOL_SHORTCUTS.doc, icon: FileText },
-];
-
-function toolsForMode(mode: Props["mode"]): ToolDef[] {
-  if (mode === "overview") return overviewTools;
-  if (mode === "workspace") return workspaceTools;
-  return branchTools;
-}
-
-function isTypingTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-  if (target.isContentEditable) return true;
-  return Boolean(target.closest("[contenteditable='true'], input, textarea, select"));
-}
 
 export function CanvasToolbar({ tool, onTool, mode }: Props) {
-  const tools = toolsForMode(mode);
+  const tools = TOOLS[mode];
 
   useEffect(() => {
-    const available = toolsForMode(mode);
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (isTypingTarget(e.target)) return;
-
-      const key = e.key.toLowerCase();
-      const match = available.find((t) => t.shortcut === key);
+      if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e.target)) return;
+      const match = tools.find((t) => t.shortcut === e.key.toLowerCase());
       if (!match) return;
-
       e.preventDefault();
       onTool(match.id);
     };
-
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, onTool]);
+  }, [tools, onTool]);
 
   return (
     <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2">
-      <div className="pointer-events-auto flex items-center gap-0.5 rounded-[10px] border border-border bg-surface/95 p-1 shadow-[0_2px_8px_rgba(0,0,0,0.04)] backdrop-blur-md">
+      <div
+        role="toolbar"
+        aria-label="Canvas tools"
+        className="pointer-events-auto flex items-center gap-0.5 rounded-[10px] border border-border bg-surface/95 p-1 shadow-[var(--shadow-soft)] backdrop-blur-md"
+      >
         {tools.map((item) => {
           const Icon = item.icon;
           const active = tool === item.id;
-          const dividerBefore = item.id === "comment";
           return (
             <div key={item.id} className="flex items-center">
-              {dividerBefore ? <div className="mx-1 h-5 w-px bg-border" /> : null}
+              {item.id === PLACEMENT_TOOLS[0]!.id ? (
+                <div className="mx-1 h-5 w-px bg-border" />
+              ) : null}
               <button
                 type="button"
                 title={`${item.label} (${item.shortcut.toUpperCase()})`}
+                aria-label={item.label}
+                aria-pressed={active}
                 onClick={() => onTool(item.id)}
                 className={clsx(
                   "flex h-8 items-center gap-1.5 rounded-[6px] px-2.5 text-[12px] transition-colors",

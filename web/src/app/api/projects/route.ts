@@ -1,7 +1,3 @@
-import { notifyAgent } from "@/server/agent";
-import { KICKOFF_PROMPT } from "@/server/constants";
-import { getEnv, getExecutionContext } from "@/server/env";
-import { requireSession } from "@/server/session";
 import {
   createDb,
   createDocumentNode,
@@ -13,83 +9,71 @@ import {
   projectMembers,
   projects,
   putObject,
-  touchProject,
   workspaces,
 } from "@lyzyos/db";
-import { NextResponse } from "next/server";
+import { MAX_KICKOFF_FILES, MAX_UPLOAD_BYTES } from "@/lib/docs";
+import { UNTITLED_PROJECT } from "@/lib/constants";
+import { notifyAgent } from "@/server/agent";
+import { KICKOFF_PROMPT } from "@/server/constants";
+import { getExecutionContext } from "@/server/env";
+import { apiContext, HttpError, json, readForm, route } from "@/server/http";
+
+const MAX_TEXT_CHARS = 200_000;
+const NODE_SPACING_X = 280;
 
 type KickoffNode =
-  | {
-      title: string;
-      kind: "note";
-      data: string;
-    }
-  | {
-      title: string;
-      kind: "doc";
-      data: { name: string; mime: string; bytes: Uint8Array };
-    };
+  | { kind: "note"; title: string; data: string }
+  | { kind: "doc"; title: string; data: { name: string; mime: string; bytes: Uint8Array } };
 
-export async function GET() {
-  const session = await requireSession();
-  const env = await getEnv();
-  const userProjects = await listProjectsForUser(env.DB, session.user.id);
+export const GET = route(async () => {
+  const { session, env } = await apiContext();
+  return json(await listProjectsForUser(env.DB, session.user.id));
+});
 
-  return NextResponse.json({ data: userProjects }, { status: 200 });
+/** Text-like attachments become notes (readable on the board); everything else is a document. */
+async function toKickoffNode(file: File): Promise<KickoffNode> {
+  const raw = await file.arrayBuffer();
+  if (isTextLikeFile(file.type || "", file.name)) {
+    const text = new TextDecoder().decode(raw).slice(0, MAX_TEXT_CHARS);
+    if (text) return { kind: "note", title: file.name, data: text };
+  }
+  return {
+    kind: "doc",
+    title: "",
+    data: {
+      name: file.name.trim(),
+      mime: file.type || "application/octet-stream",
+      bytes: new Uint8Array(raw),
+    },
+  };
 }
 
-export async function POST(request: Request) {
-  const session = await requireSession();
-  const [env, ctx] = await Promise.all([getEnv(), getExecutionContext()]);
-  const db = createDb(env.DB);
+export const POST = route(async (request) => {
+  const [{ session, env }, ctx] = await Promise.all([apiContext(), getExecutionContext()]);
+  const form = await readForm(request);
 
-  const contentType = request.headers.get("Content-Type") ?? "";
-  const newNodes: KickoffNode[] = [];
-
-  if (!contentType.includes("multipart/form-data")) {
-    return NextResponse.json({ error: "Invalid content" }, { status: 400 });
-  }
-
-  const form = await request.formData();
   const brief = String(form.get("brief") ?? "").trim();
-  if (!brief.length) return NextResponse.json({ error: "Brief is required" }, { status: 400 });
+  if (!brief) throw new HttpError(400, "Brief is required");
 
-  newNodes.push({
-    title: "Intake",
-    kind: "note",
-    data: brief,
-  });
-
-  for (const entry of form.getAll("files")) {
-    if (!(entry instanceof File)) continue;
-    const mime = entry.type || "application/octet-stream";
-    const raw = await entry.arrayBuffer();
-    const text = await extractText(entry, raw);
-    if (text) {
-      newNodes.push({
-        title: entry.name,
-        kind: "note",
-        data: text,
-      });
-      continue;
-    }
-    newNodes.push({
-      title: "",
-      kind: "doc",
-      data: {
-        name: entry.name.trim(),
-        mime,
-        bytes: new Uint8Array(raw),
-      },
-    });
+  const files = form.getAll("files").filter((entry): entry is File => entry instanceof File);
+  if (files.length > MAX_KICKOFF_FILES) {
+    throw new HttpError(400, `Attach at most ${MAX_KICKOFF_FILES} files`);
   }
+  const tooLarge = files.find((file) => file.size > MAX_UPLOAD_BYTES);
+  if (tooLarge) throw new HttpError(413, `${tooLarge.name} is too large`);
+
+  const newNodes: KickoffNode[] = [
+    { kind: "note", title: "Intake", data: brief },
+    ...(await Promise.all(files.map(toKickoffNode))),
+  ];
 
   // One batch so a failure never leaves a project without its planning workspace or owner.
+  const db = createDb(env.DB);
   const projectId = crypto.randomUUID();
-  const [[project], [workspace]] = await db.batch([
+  const [, [workspace]] = await db.batch([
     db
       .insert(projects)
-      .values({ id: projectId, name: "Untitled project", ownerId: session.user.id })
+      .values({ id: projectId, name: UNTITLED_PROJECT, ownerId: session.user.id })
       .returning(),
     db
       .insert(workspaces)
@@ -105,65 +89,39 @@ export async function POST(request: Request) {
 
   await Promise.all(
     newNodes.map(async (node, i) => {
-      const x = 40 + i * 280;
-      const y = 40;
       const base = {
         workspaceId: workspace.id,
         authorId: session.user.id,
         title: node.title,
-        x,
-        y,
+        x: 40 + i * NODE_SPACING_X,
+        y: 40,
       };
-      if (node.kind === "doc") {
-        const docId = crypto.randomUUID();
-        const key = docKey(project.id, docId, node.data.name);
-        await putObject(env.FILES, key, node.data.bytes, node.data.mime);
-        await createDocumentNode(env.DB, {
-          ...base,
-          name: node.data.name,
-          mime: node.data.mime,
-          sizeBytes: node.data.bytes.byteLength,
-          r2Key: key,
-        });
+      if (node.kind === "note") {
+        await createNoteNode(env.DB, { ...base, data: node.data });
         return;
       }
-      await createNoteNode(env.DB, { ...base, data: node.data });
+      const key = docKey(projectId, crypto.randomUUID(), node.data.name);
+      await putObject(env.FILES, key, node.data.bytes, node.data.mime);
+      await createDocumentNode(env.DB, {
+        ...base,
+        name: node.data.name,
+        mime: node.data.mime,
+        sizeBytes: node.data.bytes.byteLength,
+        r2Key: key,
+      });
     }),
   );
-
-  await touchProject(env.DB, project.id);
 
   notifyAgent(
     env,
     {
-      projectId: project.id,
+      projectId,
       threadId: workspace.id,
       workspaceId: workspace.id,
-      message: [
-        {
-          role: "user",
-          name: session.user.name,
-          message: KICKOFF_PROMPT,
-        },
-      ],
+      message: [{ role: "user", name: session.user.name, message: KICKOFF_PROMPT }],
     },
     ctx,
   );
 
-  return NextResponse.json(
-    {
-      data: { projectId: project.id, workspaceId: workspace.id },
-    },
-    { status: 201 },
-  );
-}
-
-async function extractText(file: File, bytes: ArrayBuffer) {
-  const mime = file.type || "";
-  if (!isTextLikeFile(mime, file.name)) return "";
-  try {
-    return new TextDecoder().decode(bytes).slice(0, 200_000);
-  } catch {
-    return "";
-  }
-}
+  return json({ projectId, workspaceId: workspace.id }, 201);
+});

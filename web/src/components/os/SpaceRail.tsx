@@ -23,8 +23,8 @@ export function SpaceRail({ active, onChange, onNew }: Props) {
         type="button"
         onClick={onNew}
         className="mb-3 flex h-9 w-9 items-center justify-center rounded-[8px] bg-ink text-white transition-transform active:scale-95"
-        aria-label="New campaign space"
-        title="New space"
+        aria-label="New project"
+        title="New project"
       >
         <Plus size={16} weight="bold" />
       </button>
@@ -38,6 +38,8 @@ export function SpaceRail({ active, onChange, onNew }: Props) {
               key={item.id}
               type="button"
               title={item.label}
+              aria-label={item.label}
+              aria-current={isActive ? "page" : undefined}
               onClick={() => onChange(item.id)}
               className={clsx(
                 "flex h-9 w-9 items-center justify-center rounded-[8px] transition-colors",

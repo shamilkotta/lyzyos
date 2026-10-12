@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { Plus } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { Avatar } from "@/components/ui/Avatar";
 import type { Member } from "@/lib/types";
 
 type Props = {
@@ -39,18 +41,14 @@ function clampPoint(point: Point): Point {
 export function TeamPresence({ members, activeInFor, trailing }: Props) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
+  // Only ever set from pointer events, so the portal below never renders during SSR.
   const [point, setPoint] = useState<Point | null>(null);
-  const [mounted, setMounted] = useState(false);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const activeId = pinnedId ?? hoveredId;
   const activeMember = members.find((m) => m.id === activeId) ?? null;
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!pinnedId) return;
@@ -87,11 +85,10 @@ export function TeamPresence({ members, activeInFor, trailing }: Props) {
 
   const scheduleHoverClear = () => {
     clearLeaveTimer();
+    if (pinnedId) return; // a pinned card stays until dismissed
     leaveTimer.current = setTimeout(() => {
-      if (!pinnedId) {
-        setHoveredId(null);
-        setPoint(null);
-      }
+      setHoveredId(null);
+      setPoint(null);
     }, 120);
   };
 
@@ -101,7 +98,7 @@ export function TeamPresence({ members, activeInFor, trailing }: Props) {
 
   const activeIn = activeMember ? activeInFor?.(activeMember) : undefined;
   const card =
-    mounted && activeMember && point
+    activeMember && point
       ? createPortal(
           <div
             ref={cardRef}
@@ -112,13 +109,12 @@ export function TeamPresence({ members, activeInFor, trailing }: Props) {
             onMouseLeave={scheduleHoverClear}
           >
             <div className="flex items-center gap-2.5">
-              <span className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-canvas text-[11px] font-medium text-ink">
-                {activeMember.image ? (
-                  // oxlint-disable-next-line next/no-img-element
-                  <img src={activeMember.image} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  activeMember.initials
-                )}
+              <span className="relative shrink-0">
+                <Avatar
+                  name={activeMember.name}
+                  image={activeMember.image}
+                  className="h-9 w-9 border border-border text-[11px]"
+                />
                 <span
                   className={clsx(
                     "absolute bottom-0 right-0 h-2 w-2 rounded-full ring-2 ring-surface",
@@ -157,6 +153,7 @@ export function TeamPresence({ members, activeInFor, trailing }: Props) {
             key={m.id}
             type="button"
             aria-expanded={open}
+            aria-label={`${m.name} · ${statusLabel(m.status)}`}
             onMouseEnter={(event) => {
               clearLeaveTimer();
               if (!pinnedId) {
@@ -171,30 +168,29 @@ export function TeamPresence({ members, activeInFor, trailing }: Props) {
             onMouseLeave={scheduleHoverClear}
             onClick={(event) => {
               event.stopPropagation();
+              clearLeaveTimer();
               placeAt(event.clientX, event.clientY);
               setPinnedId((current) => (current === m.id ? null : m.id));
               setHoveredId(m.id);
             }}
             className={clsx(
               "relative flex h-7 items-center overflow-hidden rounded-full border border-border/80 bg-surface font-medium text-ink shadow-sm transition-[max-width] duration-300 ease-in-out",
-              agentWorking ? "max-w-[8rem] w-fit justify-start gap-1.5 pl-1 pr-2.5" : "max-w-7 w-7 justify-center text-[10px] hover:z-10 hover:scale-105",
+              agentWorking
+                ? "max-w-[8rem] w-fit justify-start gap-1.5 pl-1 pr-2.5"
+                : "max-w-7 w-7 justify-center text-[10px] hover:z-10 hover:scale-105",
               i > 0 && "-ml-1.5",
               open && "z-10 ring-2 ring-ink/15",
             )}
           >
-            <span
-              className={clsx(
-                "flex shrink-0 items-center justify-center overflow-hidden rounded-full",
-                agentWorking ? "h-5 w-5 border border-border/60 bg-canvas text-[8px]" : "h-full w-full",
-              )}
-            >
-              {m.image ? (
-                // oxlint-disable-next-line next/no-img-element
-                <img src={m.image} alt="" className="h-full w-full object-cover" />
-              ) : (
-                m.initials
-              )}
-            </span>
+            <Avatar
+              name={m.name}
+              image={m.image}
+              className={
+                agentWorking
+                  ? "h-5 w-5 border border-border/60 text-[8px]"
+                  : "h-full w-full bg-surface"
+              }
+            />
 
             {agentWorking ? (
               <span className="flex items-center gap-0 whitespace-nowrap text-[10px] text-ink-secondary">
@@ -227,5 +223,32 @@ export function TeamPresence({ members, activeInFor, trailing }: Props) {
       ) : null}
       {card}
     </div>
+  );
+}
+
+/** Dashed "+" that sits at the end of a presence stack and opens the add-members panel. */
+export function AddMemberButton({
+  label,
+  open,
+  onClick,
+}: {
+  label: string;
+  open: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-expanded={open}
+      onClick={onClick}
+      className={clsx(
+        "relative flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-border/80 bg-surface text-ink-secondary shadow-sm transition-transform hover:z-10 hover:scale-105 hover:border-ink/30 hover:text-ink",
+        open && "z-10 border-ink/40 text-ink ring-2 ring-ink/15",
+      )}
+    >
+      <Plus size={12} weight="bold" />
+    </button>
   );
 }

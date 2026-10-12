@@ -5,15 +5,12 @@ import { Plus, Robot, SpinnerGap, User } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AGENT_ROLE } from "@lyzyos/db";
-import { memberRoles, type DirectoryUser, type MemberRole } from "@/lib/api";
+import { Avatar } from "@/components/ui/Avatar";
+import type { DirectoryUser } from "@/lib/api";
+import { formatLongDate } from "@/lib/format";
 import { useCreateMember, useDirectory } from "@/lib/queries/projects";
+import { memberRoles, type MemberRole } from "@/lib/roles";
 import { useCurrentUser } from "@/lib/session";
-
-const joinedFormat = new Intl.DateTimeFormat("en", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
 
 const roleLabel: Record<MemberRole, string> = {
   user: "Member",
@@ -21,29 +18,17 @@ const roleLabel: Record<MemberRole, string> = {
   agent: "Agent",
 };
 
-function initials(name: string) {
-  return (
-    name
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "?"
-  );
-}
+const inputClass =
+  "w-full rounded-[8px] border border-border bg-canvas px-3 py-2 text-[13px] text-ink outline-none focus:border-border-strong";
 
-function Avatar({ person, agent }: { person: DirectoryUser; agent?: boolean }) {
+function PersonAvatar({ person, agent }: { person: DirectoryUser; agent?: boolean }) {
   return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-canvas text-[11px] font-medium text-ink">
-      {person.image ? (
-        // oxlint-disable-next-line next/no-img-element
-        <img src={person.image} alt="" className="h-full w-full object-cover" />
-      ) : agent ? (
-        <Robot size={16} weight="bold" />
-      ) : (
-        initials(person.name)
-      )}
-    </span>
+    <Avatar
+      name={person.name}
+      image={person.image}
+      fallback={agent ? <Robot size={16} weight="bold" /> : undefined}
+      className="h-9 w-9 border border-border text-[11px]"
+    />
   );
 }
 
@@ -91,7 +76,9 @@ function AddMemberForm({
     setRole("user");
   };
 
-  const submit = async () => {
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
     setNotice(null);
     try {
       const { user } = await createMember.mutateAsync({
@@ -110,12 +97,15 @@ function AddMemberForm({
     }
   };
 
-  if (!open) return notice ? <p className="mt-4 text-[12px] text-ink-secondary">{notice}</p> : null;
-
   const canSubmit = name.trim().length > 0 && email.trim().length > 0 && !createMember.isPending;
 
+  if (!open) return notice ? <p className="mt-4 text-[12px] text-ink-secondary">{notice}</p> : null;
+
   return (
-    <div className="fade-up mt-6 rounded-[12px] border border-border bg-surface p-4">
+    <form
+      onSubmit={submit}
+      className="fade-up mt-6 rounded-[12px] border border-border bg-surface p-4"
+    >
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[13px] font-medium text-ink">Add a member</h2>
         <Button
@@ -137,7 +127,9 @@ function AddMemberForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ada Lovelace"
-            className="w-full rounded-[8px] border border-border bg-canvas px-3 py-2 text-[13px] text-ink outline-none"
+            required
+            maxLength={80}
+            className={inputClass}
           />
         </label>
         <label className="space-y-1">
@@ -148,7 +140,9 @@ function AddMemberForm({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@company.com"
-            className="w-full rounded-[8px] border border-border bg-canvas px-3 py-2 text-[13px] text-ink outline-none"
+            type="email"
+            required
+            className={inputClass}
           />
         </label>
         <label className="space-y-1">
@@ -158,7 +152,7 @@ function AddMemberForm({
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as MemberRole)}
-            className="w-full rounded-[8px] border border-border bg-canvas px-3 py-2 text-[13px] text-ink outline-none"
+            className={inputClass}
           >
             {memberRoles.map((r) => (
               <option key={r} value={r}>
@@ -174,12 +168,12 @@ function AddMemberForm({
           : "The member gets an email with a link to set their own password."}
       </p>
       <div className="mt-3 flex items-center gap-2">
-        <Button onClick={() => void submit()} disabled={!canSubmit}>
+        <Button type="submit" disabled={!canSubmit}>
           {createMember.isPending ? "Adding…" : "Send invite"}
         </Button>
       </div>
       {notice ? <p className="mt-3 text-[12px] text-ink-secondary">{notice}</p> : null}
-    </div>
+    </form>
   );
 }
 
@@ -234,7 +228,7 @@ export function TeamDirectory() {
                   className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 last:border-0"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <Avatar person={agent} agent />
+                    <PersonAvatar person={agent} agent />
                     <div className="min-w-0">
                       <p className="text-[14px] font-medium text-ink">{agent.name}</p>
                       <p className="mt-0.5 text-[12px] text-ink-secondary">
@@ -254,7 +248,7 @@ export function TeamDirectory() {
                   className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 last:border-0"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <Avatar person={person} />
+                    <PersonAvatar person={person} />
                     <div className="min-w-0">
                       <p className="truncate text-[14px] font-medium text-ink">
                         {person.name}
@@ -272,7 +266,7 @@ export function TeamDirectory() {
                   <div className="flex shrink-0 items-center gap-3">
                     {person.role === "admin" ? <StatusBadge tone="info">Admin</StatusBadge> : null}
                     <span className="font-mono text-[11px] text-ink-tertiary">
-                      Joined {joinedFormat.format(person.createdAt)}
+                      Joined {formatLongDate(person.createdAt)}
                     </span>
                   </div>
                 </li>

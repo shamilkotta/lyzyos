@@ -2,28 +2,19 @@
 
 import { Archive, ArrowCounterClockwise, CirclesFour, SpinnerGap } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useArchivedProjects, useUnarchiveProject } from "@/lib/queries/projects";
+import { formatLongDate } from "@/lib/format";
+import { useArchivedProjects, useSetProjectArchived } from "@/lib/queries/projects";
 import { routes } from "@/lib/routes";
 
-const dateFormat = new Intl.DateTimeFormat("en", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-
-function formatDate(timestamp: number) {
-  return dateFormat.format(timestamp);
-}
-
 function UnarchiveButton({ projectId }: { projectId: string }) {
-  const { mutate, isPending } = useUnarchiveProject(projectId);
+  const { mutate, isPending } = useSetProjectArchived(projectId);
   return (
     <button
       type="button"
       disabled={isPending}
       onClick={(e) => {
         e.stopPropagation();
-        mutate();
+        mutate(false);
       }}
       className="flex items-center gap-1.5 rounded-[6px] border border-border px-2.5 py-1 text-[12px] text-ink-secondary transition-colors hover:border-border-strong hover:text-ink disabled:opacity-50"
     >
@@ -45,7 +36,7 @@ export function ArchivesView() {
             <button
               type="button"
               onClick={() => router.push(routes.projects)}
-              className="text-[13px] text-ink-tertiary hover:text-ink transition-colors"
+              className="text-[13px] text-ink-tertiary transition-colors hover:text-ink"
             >
               ← Projects
             </button>
@@ -85,7 +76,7 @@ export function ArchivesView() {
                       </span>
                       {project.archivedAt ? (
                         <span className="text-[11px] text-ink-tertiary">
-                          Archived {formatDate(project.archivedAt)}
+                          Archived {formatLongDate(project.archivedAt)}
                         </span>
                       ) : null}
                     </div>

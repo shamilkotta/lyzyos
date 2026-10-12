@@ -1,27 +1,26 @@
-import {
-  parseServerMessage,
-  type BoardSnapshot,
-  type ClientToServerMessage,
-  type ServerToClientMessage,
-  type SyncEvent,
-  type SyncPeer,
-} from "@lyzyos/db";
+import { parseServerMessage, type ClientToServerMessage, type SyncEvent } from "@lyzyos/db";
 import type { BoardState } from "./project-types";
 import { toBoardState } from "./project-types";
 
-export type { BoardSnapshot, ClientToServerMessage, ServerToClientMessage, SyncEvent, SyncPeer };
-export { parseServerMessage };
+export { parseServerMessage, type ClientToServerMessage };
+export type { SyncPeer } from "@lyzyos/db";
 
 export const CLIENT_ID_HEADER = "X-Client-Id";
 const CLIENT_ID_KEY = "lyzy.clientId";
 const CLIENT_NAME_KEY = "lyzy.clientName";
 
+let cachedClientId: string | null = null;
+
+/** Stable per-browser id so the sync room can drop echoes of this tab's own writes. */
 export function getOrCreateClientId() {
+  if (cachedClientId) return cachedClientId;
   if (typeof window === "undefined") return crypto.randomUUID();
-  const existing = window.localStorage.getItem(CLIENT_ID_KEY);
-  if (existing) return existing;
-  const id = crypto.randomUUID();
-  window.localStorage.setItem(CLIENT_ID_KEY, id);
+  let id = window.localStorage.getItem(CLIENT_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    window.localStorage.setItem(CLIENT_ID_KEY, id);
+  }
+  cachedClientId = id;
   return id;
 }
 
@@ -30,7 +29,7 @@ export function getClientName() {
   return window.localStorage.getItem(CLIENT_NAME_KEY) || "You";
 }
 
-export function applySyncEvent(board: BoardState, event: SyncEvent) {
+export function applySyncEvent(board: BoardState, event: SyncEvent): BoardState {
   switch (event.type) {
     case "board.replace":
       return toBoardState(event.board, board);
@@ -42,10 +41,7 @@ export function applySyncEvent(board: BoardState, event: SyncEvent) {
         status: event.project.status,
       };
     case "workspace.updated":
-      return {
-        ...board,
-        workspace: { ...board.workspace, ...event.workspace },
-      };
+      return { ...board, workspace: { ...board.workspace, ...event.workspace } };
     case "node.upserted": {
       const idx = board.nodes.findIndex((n) => n.id === event.node.id);
       if (idx === -1) return { ...board, nodes: [...board.nodes, event.node] };
@@ -81,10 +77,6 @@ export function applySyncEvent(board: BoardState, event: SyncEvent) {
       return _exhaustive;
     }
   }
-}
-
-export function snapshotToBoardState(snapshot: BoardSnapshot, prev?: BoardState | null) {
-  return toBoardState(snapshot, prev);
 }
 
 export function workspaceSyncWsUrl(

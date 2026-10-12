@@ -6,57 +6,37 @@ import {
   unarchiveProject,
   userHasProjectAccess,
 } from "@lyzyos/db";
-import { getEnv } from "@/server/env";
-import { requireSession } from "@/server/session";
-import { NextResponse } from "next/server";
 import { z } from "zod";
-
-const patchBodySchema = z.object({ archived: z.boolean() });
+import { apiContext, HttpError, json, readJson, route } from "@/server/http";
 
 type Params = { params: Promise<{ projectId: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
-  const { projectId } = await params;
-
-  const session = await requireSession();
-  const env = await getEnv();
+export const GET = route<Params>(async (_request, { params }) => {
+  const [{ projectId }, { session, env }] = await Promise.all([params, apiContext()]);
 
   const project = await getProjectForUser(env.DB, projectId, session.user.id);
-
-  if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  if (!project) throw new HttpError(404, "Project not found");
 
   const [members, projectMemberIds] = await Promise.all([
     getProjectRoster(env.DB, { projectId }),
     getProjectMemberIds(env.DB, projectId),
   ]);
-  return NextResponse.json({ data: { ...project, members, projectMemberIds } }, { status: 200 });
-}
+  return json({ ...project, members, projectMemberIds });
+});
 
-export async function PATCH(request: Request, { params }: Params) {
-  const { projectId } = await params;
+const patchSchema = z.object({ archived: z.boolean() });
 
-  const session = await requireSession();
-  const env = await getEnv();
+export const PATCH = route<Params>(async (request, { params }) => {
+  const [{ projectId }, { session, env }] = await Promise.all([params, apiContext()]);
 
-  const hasMembership = await userHasProjectAccess(env.DB, {
-    projectId,
-    userId: session.user.id,
-  });
-  if (!hasMembership) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const isMember = await userHasProjectAccess(env.DB, { projectId, userId: session.user.id });
+  if (!isMember) throw new HttpError(403, "Forbidden");
 
-  const parsed = patchBodySchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: z.treeifyError(parsed.error) }, { status: 400 });
-  }
-
-  const { archived } = parsed.data;
+  const { archived } = await readJson(request, patchSchema);
   const updated = archived
     ? await archiveProject(env.DB, projectId)
     : await unarchiveProject(env.DB, projectId);
+  if (!updated) throw new HttpError(404, "Project not found");
 
-  if (!updated) return NextResponse.json({ error: "Project not found" }, { status: 404 });
-
-  return NextResponse.json({ data: updated }, { status: 200 });
-}
+  return json(updated);
+});

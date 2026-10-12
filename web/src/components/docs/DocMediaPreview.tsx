@@ -35,6 +35,8 @@ function PreviewBody({
       <img
         src={url}
         alt=""
+        loading="lazy"
+        decoding="async"
         className={clsx(
           "w-full object-contain",
           size === "card" && "h-28",
@@ -46,14 +48,15 @@ function PreviewBody({
     );
   }
 
-  if (kind === "pdf") {
+  // A PDF viewer is a whole browsing context; mounting one per canvas card is far too heavy, so
+  // cards show a tile and the viewer only loads in the side panel or fullscreen.
+  if (kind === "pdf" && size !== "card") {
     return (
       <iframe
         src={url}
         title="PDF preview"
         className={clsx(
           "w-full border-0 bg-canvas",
-          size === "card" && "h-36",
           size === "panel" && "h-64",
           size === "modal" && "h-[min(80vh,900px)]",
         )}
@@ -70,7 +73,7 @@ function PreviewBody({
         size === "modal" && "h-48",
       )}
     >
-      {mime?.split("/")[1]?.toUpperCase() || "FILE"}
+      {kind === "pdf" ? "PDF" : mime?.split("/")[1]?.toUpperCase() || "FILE"}
     </div>
   );
 }
@@ -81,14 +84,17 @@ export function DocMediaPreview({ url, kind, mime, title, size = "card", classNa
 
   useEffect(() => {
     if (!open) return;
+    // Capture phase + preventDefault so the shell's "Escape leaves the workspace" stands down.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setOpen(false);
     };
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
       document.body.style.overflow = prev;
     };
   }, [open]);
@@ -117,7 +123,7 @@ export function DocMediaPreview({ url, kind, mime, title, size = "card", classNa
         </button>
       </div>
 
-      {typeof document !== "undefined" && open
+      {open
         ? createPortal(
             <div
               className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-[2px]"

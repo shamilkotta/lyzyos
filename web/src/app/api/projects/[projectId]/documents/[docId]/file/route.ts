@@ -1,5 +1,3 @@
-import { getEnv } from "@/server/env";
-import { requireSession } from "@/server/session";
 import {
   createDb,
   documents,
@@ -8,42 +6,31 @@ import {
   previewKindFromMime,
 } from "@lyzyos/db";
 import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { apiContext, HttpError, route } from "@/server/http";
 
 type Params = { params: Promise<{ projectId: string; docId: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
-  const { projectId, docId } = await params;
-  const session = await requireSession();
+export const GET = route<Params>(async (_request, { params }) => {
+  const [{ projectId, docId }, { session, env }] = await Promise.all([params, apiContext()]);
 
-  const env = await getEnv();
-  const db = createDb(env.DB);
-
-  const doc = await db.query.documents.findFirst({
+  const doc = await createDb(env.DB).query.documents.findFirst({
     where: eq(documents.id, docId),
-    with: {
-      thread: {
-        columns: { workspaceId: true },
-      },
-    },
+    with: { thread: { columns: { workspaceId: true } } },
   });
-
-  if (!doc?.thread) {
-    return NextResponse.json({ error: "Document not found" }, { status: 404 });
-  }
+  if (!doc?.thread) throw new HttpError(404, "Document not found");
 
   const workspace = await getWorkspaceForUser(env.DB, doc.thread.workspaceId, session.user.id);
   if (!workspace || workspace.projectId !== projectId) {
-    return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    throw new HttpError(404, "Document not found");
   }
 
   const obj = await getObject(env.FILES, doc.r2Key);
-  if (!obj) return NextResponse.json({ error: "File missing" }, { status: 404 });
+  if (!obj) throw new HttpError(404, "File missing");
 
   return new Response(obj.body, {
     headers: fileHeaders(doc.name, doc.mime || obj.httpMetadata?.contentType || ""),
   });
-}
+});
 
 /**
  * Uploaded files are user-controlled and served from the app origin, so never let the browser

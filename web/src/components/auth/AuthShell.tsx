@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PRODUCT_NAME } from "@/lib/data";
+import { PRODUCT_NAME } from "@/lib/constants";
 import { routes } from "@/lib/routes";
 
 export function AuthShell({

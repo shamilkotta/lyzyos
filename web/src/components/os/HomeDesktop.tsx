@@ -9,39 +9,27 @@ import {
   Clock,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { PRODUCT_NAME } from "@/lib/data";
+import clsx from "clsx";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { PRODUCT_NAME } from "@/lib/constants";
+import { formatRelative, formatShortDate } from "@/lib/format";
 import { useProjects } from "@/lib/queries/projects";
 import { routes } from "@/lib/routes";
-import { StatusBadge } from "@/components/ui/StatusBadge";
+import { projectStatusLabel, projectStatusTone } from "@/lib/status";
 import { KickoffComposer } from "./KickoffComposer";
-import clsx from "clsx";
 
 const RECENT_PROJECT_COUNT = 3;
+const LIST_PROJECT_COUNT = 8;
 
-const dateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
-const relativeFormat = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-
-function formatDate(timestamp: number) {
-  return dateFormat.format(timestamp);
-}
-
-function formatRelative(timestamp: number) {
-  const minutes = Math.round((timestamp - Date.now()) / 60_000);
-  if (Math.abs(minutes) < 60) return relativeFormat.format(minutes, "minute");
-  const hours = Math.round(minutes / 60);
-  if (Math.abs(hours) < 24) return relativeFormat.format(hours, "hour");
-  return relativeFormat.format(Math.round(hours / 24), "day");
-}
-
-type Props = {
-  kickoffFocusToken?: number;
-};
-
-export function HomeDesktop({ kickoffFocusToken }: Props) {
+export function HomeDesktop() {
   const router = useRouter();
-  const { data: liveProjects = [], isLoading, isFetching, refetch } = useProjects();
+  const { data: liveProjects = [], isLoading, isFetching } = useProjects();
   // The API returns projects most recently updated first.
   const recentProjects = liveProjects.slice(0, RECENT_PROJECT_COUNT);
+  const completeCount = liveProjects.filter((p) => p.status !== "in_progress").length;
+  const progress = liveProjects.length
+    ? Math.round((completeCount / liveProjects.length) * 100)
+    : 0;
 
   return (
     <div className="relative h-full overflow-auto">
@@ -70,15 +58,9 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
 
         <div className="mb-10">
           <KickoffComposer
-            focusToken={kickoffFocusToken}
-            onCreated={(projectId, _name, workspaceId) => {
-              void refetch();
-              if (workspaceId) {
-                router.push(routes.projectWorkspace(projectId, workspaceId));
-                return;
-              }
-              router.push(routes.project(projectId));
-            }}
+            onOpen={(projectId, workspaceId) =>
+              router.push(routes.projectWorkspace(projectId, workspaceId))
+            }
           />
         </div>
 
@@ -121,8 +103,8 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                       <span className="flex h-8 w-8 items-center justify-center rounded-[8px] bg-canvas text-ink">
                         <CirclesFour size={15} weight="bold" />
                       </span>
-                      <StatusBadge tone={project.status === "in_progress" ? "info" : "ok"}>
-                        {project.status === "in_progress" ? "In progress" : "Complete"}
+                      <StatusBadge tone={projectStatusTone(project.status)}>
+                        {projectStatusLabel(project.status)}
                       </StatusBadge>
                     </div>
 
@@ -136,7 +118,7 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                     </p>
                     <div className="mt-3 flex items-center justify-between text-[12px] text-ink-tertiary">
                       <span>Created</span>
-                      <span className="font-mono">{formatDate(project.createdAt)}</span>
+                      <span className="font-mono">{formatShortDate(project.createdAt)}</span>
                     </div>
                   </button>
                 ))}
@@ -162,12 +144,12 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                 </button>
               </div>
               <ul className="rounded-[12px] border border-border bg-surface">
-                {liveProjects.slice(0, 8).map((project) => (
+                {liveProjects.slice(0, LIST_PROJECT_COUNT).map((project) => (
                   <li key={project.id} className="border-b border-border last:border-0">
                     <button
                       type="button"
                       onClick={() => router.push(routes.project(project.id))}
-                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-soft"
+                      className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-soft"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <CirclesFour
@@ -184,8 +166,8 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                           <Clock size={11} />
                           {formatRelative(project.updatedAt)}
                         </span>
-                        <StatusBadge tone={project.status === "in_progress" ? "info" : "ok"}>
-                          {project.status === "in_progress" ? "In progress" : "Complete"}
+                        <StatusBadge tone={projectStatusTone(project.status)}>
+                          {projectStatusLabel(project.status)}
                         </StatusBadge>
                         <ArrowRight
                           size={12}
@@ -196,9 +178,9 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                   </li>
                 ))}
               </ul>
-              {liveProjects.length > 8 ? (
+              {liveProjects.length > LIST_PROJECT_COUNT ? (
                 <p className="mt-2 text-center text-[12px] text-ink-tertiary">
-                  +{liveProjects.length - 8} more projects
+                  +{liveProjects.length - LIST_PROJECT_COUNT} more projects
                 </p>
               ) : null}
             </div>
@@ -219,14 +201,14 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                   <div className="flex items-center justify-between">
                     <span className="text-[13px] text-ink-secondary">In progress</span>
                     <span className="font-mono text-[20px] font-semibold text-ink">
-                      {liveProjects.filter((p) => p.status === "in_progress").length}
+                      {liveProjects.length - completeCount}
                     </span>
                   </div>
                   <div className="h-px bg-border" />
                   <div className="flex items-center justify-between">
                     <span className="text-[13px] text-ink-secondary">Complete</span>
                     <span className="font-mono text-[20px] font-semibold text-ink">
-                      {liveProjects.filter((p) => p.status !== "in_progress").length}
+                      {completeCount}
                     </span>
                   </div>
                 </div>
@@ -235,20 +217,13 @@ export function HomeDesktop({ kickoffFocusToken }: Props) {
                   <div className="mt-4">
                     <div className="mb-1.5 flex justify-between text-[11px] text-ink-tertiary">
                       <span>Progress</span>
-                      <span>
-                        {Math.round(
-                          (liveProjects.filter((p) => p.status !== "in_progress").length /
-                            liveProjects.length) *
-                            100,
-                        )}
-                        %
-                      </span>
+                      <span>{progress}%</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-canvas">
                       <div
                         className="h-full rounded-full bg-ink transition-all duration-500"
                         style={{
-                          width: `${Math.round((liveProjects.filter((p) => p.status !== "in_progress").length / liveProjects.length) * 100)}%`,
+                          width: `${progress}%`,
                         }}
                       />
                     </div>
@@ -274,81 +249,6 @@ function SpacePreview({ panes }: { panes: [string, string, string] }) {
       <div className="grid h-20 grid-cols-3 gap-1.5 p-2">
         {panes.map((pane) => (
           <div key={pane} className={clsx("rounded-[4px] border border-border", pane)} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function KnowledgeSurface() {
-  const groups = [
-    {
-      title: "Brand",
-      items: ["Brand Guidelines", "Voice & Tone", "Terminology"],
-    },
-    {
-      title: "Product",
-      items: ["SecureEdge Overview", "Approved Claims v2.1", "Pricing notes"],
-    },
-    {
-      title: "Markets",
-      items: ["United States", "United Kingdom", "Germany"],
-    },
-    {
-      title: "Policies",
-      items: ["Legal", "Accessibility", "Regional Rules"],
-    },
-  ];
-
-  return (
-    <div className="mx-auto max-w-4xl px-8 py-12 fade-up">
-      <h1 className="text-[28px] font-medium tracking-[-0.03em] text-ink">Knowledge</h1>
-      <p className="mt-2 text-[14px] text-ink-secondary">
-        Sources agents read before they generate, check, or localize.
-      </p>
-      <div className="mt-8 grid gap-3 sm:grid-cols-2">
-        {groups.map((group) => (
-          <div key={group.title} className="rounded-[12px] border border-border bg-surface p-4">
-            <h2 className="text-[12px] font-medium uppercase tracking-[0.05em] text-ink-tertiary">
-              {group.title}
-            </h2>
-            <ul className="mt-3 space-y-0">
-              {group.items.map((item) => (
-                <li
-                  key={item}
-                  className="border-b border-border py-2 text-[13px] text-ink last:border-0"
-                >
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function SettingsSurface() {
-  return (
-    <div className="mx-auto max-w-xl px-8 py-12 fade-up">
-      <h1 className="text-[28px] font-medium tracking-[-0.03em] text-ink">Settings</h1>
-      <p className="mt-2 text-[14px] text-ink-secondary">
-        Workspace defaults. Kept quiet on purpose.
-      </p>
-      <div className="mt-8 space-y-0 rounded-[12px] border border-border bg-surface">
-        {[
-          "Organization · Northwind Marketing Ops",
-          "Default markets · US, UK, DE",
-          "Approval chain · Brand → Legal → Client",
-          "Agent autonomy · Draft + QA, never publish",
-        ].map((row) => (
-          <div
-            key={row}
-            className="border-b border-border px-4 py-3 text-[13px] text-ink last:border-0"
-          >
-            {row}
-          </div>
         ))}
       </div>
     </div>

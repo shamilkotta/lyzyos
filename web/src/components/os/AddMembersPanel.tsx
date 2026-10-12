@@ -5,6 +5,7 @@ import { Check, SpinnerGap } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { AGENT_ROLE } from "@lyzyos/db";
 import { FloatingPanel } from "@/components/os/FloatingPanel";
+import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import type { DirectoryUser } from "@/lib/api";
 import { useDirectory } from "@/lib/queries/projects";
@@ -17,17 +18,6 @@ type Props = {
   onClose: () => void;
   onSubmit: (userIds: string[]) => Promise<void>;
 };
-
-function initials(name: string) {
-  return (
-    name
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "?"
-  );
-}
 
 export function AddMembersPanel({
   title = "Add members",
@@ -47,7 +37,6 @@ export function AddMembersPanel({
     const users = data?.users ?? [];
     return users
       .filter((u) => u.role !== AGENT_ROLE)
-      .slice()
       .sort((a, b) => {
         const aIn = memberIds.has(a.id) ? 1 : 0;
         const bIn = memberIds.has(b.id) ? 1 : 0;
@@ -134,6 +123,7 @@ export function AddMembersPanel({
                   <button
                     type="button"
                     disabled={already}
+                    aria-pressed={already || isSelected}
                     onClick={() => toggle(person)}
                     className={clsx(
                       "flex w-full items-center gap-2.5 rounded-[8px] px-2 py-2 text-left transition-colors",
@@ -144,14 +134,11 @@ export function AddMembersPanel({
                           : "hover:bg-surface-soft/70",
                     )}
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-canvas text-[10px] font-medium text-ink">
-                      {person.image ? (
-                        // oxlint-disable-next-line next/no-img-element
-                        <img src={person.image} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        initials(person.name)
-                      )}
-                    </span>
+                    <Avatar
+                      name={person.name}
+                      image={person.image}
+                      className="h-8 w-8 border border-border text-[10px]"
+                    />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-medium text-ink">
                         {person.name}

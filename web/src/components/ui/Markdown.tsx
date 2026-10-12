@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import clsx from "clsx";
@@ -22,6 +22,7 @@ const MENTION_PATTERN = /(^|[^\w@])@([A-Za-z][\w.-]*)/g;
 // Code spans/blocks are left untouched so `@decorators` in code never become chips.
 const CODE_PATTERN = /(```[\s\S]*?```|`[^`\n]*`)/g;
 const AGENT_HANDLES = ["lyzy", "agent"];
+const REMARK_PLUGINS = [remarkGfm];
 
 function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -79,15 +80,21 @@ const components: Components = {
   },
 };
 
-export function Markdown({ children, variant = "full", className, mentions }: Props) {
+/** Memoized: canvas cards re-render often and markdown parsing is the expensive part. */
+export const Markdown = memo(function Markdown({
+  children,
+  variant = "full",
+  className,
+  mentions,
+}: Props) {
   const index = useMemo(() => (mentions?.length ? buildHandleIndex(mentions) : null), [mentions]);
   const source = index ? linkMentions(children, index) : children;
 
   return (
     <div className={clsx("markdown", variant === "compact" && "markdown-compact", className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={components}>
         {source}
       </ReactMarkdown>
     </div>
   );
-}
+});

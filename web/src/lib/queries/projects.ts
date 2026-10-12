@@ -1,10 +1,9 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addProjectMembers,
   addWorkspaceMembers,
-  archiveProject,
   createMember,
   createProject,
   createWorkspace,
@@ -12,185 +11,49 @@ import {
   getProject,
   getWorkspaceBoard,
   listArchivedProjects,
-  listProjects,
   listDirectory,
+  listProjects,
   listProjectWorkspaces,
-  unarchiveProject,
-  updateWorkspace,
+  setProjectArchived,
 } from "@/lib/api";
-import type { ApiProjectListItem } from "@/lib/project-types";
+import { UNTITLED_PROJECT } from "@/lib/constants";
 import { queryKeys } from "@/lib/query-keys";
 
-type ProjectsRefetchInterval =
-  | number
-  | false
-  | ((query: Query<ApiProjectListItem[]>) => number | false | undefined);
+const UNTITLED_POLL_MS = 2_500;
+const AGENT_STATUS_POLL_MS = 3_000;
 
-export function useProjects(options?: { refetchInterval?: ProjectsRefetchInterval }) {
-  return useQuery({
-    queryKey: queryKeys.projects.all,
-    queryFn: listProjects,
-    refetchOnWindowFocus: true,
-    refetchInterval: options?.refetchInterval,
-  });
-}
-
-export function useProject(projectId: string, options?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: queryKeys.projects.detail(projectId),
-    queryFn: () => getProject(projectId),
-    enabled: (options?.enabled ?? true) && Boolean(projectId),
-    refetchOnWindowFocus: true,
-  });
-}
-
-export function useProjectWorkspaces(projectId: string, options?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: queryKeys.projects.workspaces(projectId),
-    queryFn: () => listProjectWorkspaces(projectId),
-    enabled: (options?.enabled ?? true) && Boolean(projectId),
-    refetchOnWindowFocus: true,
-  });
-}
-
-export function useProjectBoard(
-  projectId: string,
-  options?: { enabled?: boolean; workspaceId?: string | null },
-) {
-  const workspaceId = options?.workspaceId ?? null;
-  return useQuery({
-    queryKey: queryKeys.projects.board(projectId, workspaceId ?? ""),
-    queryFn: () => {
-      if (!workspaceId) throw new Error("workspaceId required");
-      return getWorkspaceBoard(projectId, workspaceId);
-    },
-    enabled: (options?.enabled ?? true) && Boolean(projectId) && Boolean(workspaceId),
-    refetchOnWindowFocus: true,
-  });
-}
-
-export function useCreateProject() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: createProject,
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      if (result.projectId) {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.projects.detail(result.projectId),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.projects.workspaces(result.projectId),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.projects.board(result.projectId, result.workspaceId),
-        });
-      }
-    },
-  });
-}
-
-export function useDirectory() {
-  return useQuery({
-    queryKey: queryKeys.directory,
-    queryFn: listDirectory,
-    refetchOnWindowFocus: true,
-  });
-}
-
-export function useCreateMember() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: createMember,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.directory });
-    },
-  });
-}
-
-export function useCreateWorkspace(projectId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { name: string; kind?: string }) => createWorkspace(projectId, input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.workspaces(projectId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-    },
-  });
-}
-
-export function useUpdateWorkspace(projectId: string, workspaceId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: {
-      status?: string;
-      statusNote?: string | null;
-      attention?: string | null;
-    }) => updateWorkspace(projectId, workspaceId, input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.workspaces(projectId) });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.projects.board(projectId, workspaceId),
-      });
-    },
-  });
-}
-
-export function useAddWorkspaceMembers(projectId: string, workspaceId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (userIds: string[]) => addWorkspaceMembers(projectId, workspaceId, userIds),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.projects.board(projectId, workspaceId),
-      });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.workspaces(projectId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-    },
-  });
-}
-
-export function useAddProjectMembers(projectId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (userIds: string[]) => addProjectMembers(projectId, userIds),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.workspaces(projectId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-    },
-  });
+export function useProjects() {
+  return useQuery({ queryKey: queryKeys.projects.all, queryFn: listProjects });
 }
 
 export function useArchivedProjects() {
+  return useQuery({ queryKey: queryKeys.projects.archived, queryFn: listArchivedProjects });
+}
+
+export function useProject(projectId: string | null) {
   return useQuery({
-    queryKey: queryKeys.projects.archived,
-    queryFn: listArchivedProjects,
-    refetchOnWindowFocus: true,
+    queryKey: queryKeys.projects.detail(projectId ?? ""),
+    queryFn: () => getProject(projectId!),
+    enabled: Boolean(projectId),
+    // The agent renames new projects shortly after kickoff; poll until it has.
+    refetchInterval: (query) =>
+      query.state.data?.name === UNTITLED_PROJECT ? UNTITLED_POLL_MS : false,
   });
 }
 
-export function useArchiveProject(projectId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => archiveProject(projectId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.archived });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-    },
+export function useProjectWorkspaces(projectId: string) {
+  return useQuery({
+    queryKey: queryKeys.projects.workspaces(projectId),
+    queryFn: () => listProjectWorkspaces(projectId),
+    enabled: Boolean(projectId),
   });
 }
 
-export function useUnarchiveProject(projectId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => unarchiveProject(projectId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.archived });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-    },
+export function useProjectBoard(projectId: string | null, workspaceId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.projects.board(projectId ?? "", workspaceId ?? ""),
+    queryFn: () => getWorkspaceBoard(projectId!, workspaceId!),
+    enabled: Boolean(projectId && workspaceId),
   });
 }
 
@@ -198,8 +61,64 @@ export function useAgentStatus(projectId: string) {
   const { data } = useQuery({
     queryKey: queryKeys.projects.agentStatus(projectId),
     queryFn: () => fetchAgentStatus(projectId),
-    refetchInterval: 3000,
-    refetchIntervalInBackground: false,
+    refetchInterval: AGENT_STATUS_POLL_MS,
+    retry: false,
   });
   return data ?? false;
+}
+
+export function useCreateProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createProject,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.projects.all }),
+  });
+}
+
+export function useSetProjectArchived(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (archived: boolean) => setProjectArchived(projectId, archived),
+    // `projects.all` is a prefix of the archived list and the project detail.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.projects.all }),
+  });
+}
+
+export function useCreateWorkspace(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; kind?: string }) => createWorkspace(projectId, input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.workspaces(projectId) }),
+  });
+}
+
+export function useAddProjectMembers(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userIds: string[]) => addProjectMembers(projectId, userIds),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) }),
+  });
+}
+
+export function useAddWorkspaceMembers(projectId: string, workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userIds: string[]) => addWorkspaceMembers(projectId, workspaceId, userIds),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) }),
+  });
+}
+
+export function useDirectory() {
+  return useQuery({ queryKey: queryKeys.directory, queryFn: listDirectory });
+}
+
+export function useCreateMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createMember,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.directory }),
+  });
 }

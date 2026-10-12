@@ -1,7 +1,5 @@
-"use client";
-
-import { SettingsSurface } from "@/components/os/HomeDesktop";
+import { SettingsView } from "@/components/os/SettingsView";
 
 export default function SettingsPage() {
-  return <SettingsSurface />;
+  return <SettingsView />;
 }

@@ -8,27 +8,29 @@ export const routes = {
   project: (projectId: string) => `/projects/${projectId}`,
   projectWorkspace: (projectId: string, workspaceId: string) =>
     `/projects/${projectId}/workspaces/${workspaceId}`,
-  space: (spaceId: string) => `/spaces/${spaceId}`,
-  knowledge: "/knowledge",
   members: "/members",
   settings: "/settings",
 } as const;
 
 export type RailId = "home" | "members" | "settings";
 
+export const RAIL_ROUTES: Record<RailId, string> = {
+  home: routes.projects,
+  members: routes.members,
+  settings: routes.settings,
+};
+
 export function railFromPathname(pathname: string): RailId {
-  if (pathname.startsWith("/members")) return "members";
-  if (pathname.startsWith("/settings")) return "settings";
+  if (pathname.startsWith(routes.members)) return "members";
+  if (pathname.startsWith(routes.settings)) return "settings";
   return "home";
 }
 
-export function routeForRail(rail: RailId): string {
-  switch (rail) {
-    case "home":
-      return routes.projects;
-    case "members":
-      return routes.members;
-    case "settings":
-      return routes.settings;
-  }
+/** Splits an OS pathname into the project/workspace it addresses, if any. */
+export function parseProjectPath(pathname: string) {
+  const match = pathname.match(/^\/projects\/([^/]+)(?:\/workspaces\/([^/]+))?/);
+  const projectId = match?.[1];
+  // `/projects/archives` is a listing, not a project.
+  if (!projectId || projectId === "archives") return { projectId: null, workspaceId: null };
+  return { projectId, workspaceId: match?.[2] ?? null };
 }

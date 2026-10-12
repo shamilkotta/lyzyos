@@ -1,63 +1,44 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import {
-  Buildings,
-  Cube,
+  ArrowRight,
   ChatCircleText,
-  WarningCircle,
-  NoteBlank,
   CheckCircle,
   CircleDashed,
-  ArrowRight,
-  ListChecks,
-  Path,
+  Cube,
+  NoteBlank,
+  SquaresFour,
+  WarningCircle,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { DocMediaPreview, mediaKindFromPreview } from "@/components/docs/DocMediaPreview";
+import { Avatar } from "@/components/ui/Avatar";
 import { Markdown } from "@/components/ui/Markdown";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { DocMediaPreview, mediaKindFromPreview } from "@/components/docs/DocMediaPreview";
-import type { BranchItemKind, Member, StatusTone, WorkStatus } from "@/lib/types";
+import { workStatusLabel } from "@/lib/status";
+import type { Member, StatusTone, WorkStatus } from "@/lib/types";
 
-export type DepartmentNodeData = {
-  kind: "department";
+/** A workspace card on the project overview graph. */
+export type WorkspaceSummaryData = {
   title: string;
   summary: string;
   tone: StatusTone;
   status: WorkStatus;
   members: Member[];
-  branchCount?: number;
   attention?: string;
-  openLabel?: string;
 };
 
-export type ItemNodeData = {
-  kind: BranchItemKind;
-  title: string;
-  body?: string;
-  tone?: StatusTone;
-  meta?: string;
-  authorName?: string;
-  authorKind?: "human" | "agent";
-  authorInitials?: string;
-  label?: string;
-};
+export type BoardCardKind = "note" | "comment" | "doc";
 
-export type WorkspaceCardAction = {
-  tone: StatusTone;
-  variant: "needs_reply" | "resolved";
-};
-
-export type WorkspaceCardData = {
-  kind: "board";
+/** A note / comment thread / document card on a workspace board. */
+export type BoardCardData = {
   title: string;
   summary: string;
   typeLabel: string;
-  action?: WorkspaceCardAction;
   members: Member[];
-  attention?: string;
-  icon: "note" | "comment" | "doc";
+  icon: BoardCardKind;
   preview?: {
     kind: "image" | "pdf" | "video" | "audio" | "text" | "file";
     url?: string;
@@ -66,19 +47,22 @@ export type WorkspaceCardData = {
   };
 };
 
-export type BoardNodeData = DepartmentNodeData | ItemNodeData | WorkspaceCardData;
-export type BoardNode = Node<BoardNodeData>;
+export type WorkspaceSummaryNode = Node<WorkspaceSummaryData, "workspace">;
+export type BoardCardNode = Node<BoardCardData, "board">;
+
+/** Marks the in-card "Open" affordance so click handlers can tell it apart from a select. */
+export const OPEN_WORKSPACE_ATTR = "data-open-workspace";
 
 function NodeShell({
   children,
   selected,
   className,
-  width = 240,
+  width,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   selected?: boolean;
   className?: string;
-  width?: number;
+  width: number;
 }) {
   return (
     <div
@@ -86,9 +70,8 @@ function NodeShell({
       className={clsx(
         "rounded-[10px] border bg-surface px-3.5 pt-3 transition-[box-shadow,border-color] duration-200",
         selected
-          ? "border-ink shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+          ? "border-ink shadow-[var(--shadow-soft)]"
           : "border-border hover:border-border-strong",
-        !/\bpb-/.test(className ?? "") && "pb-3",
         className,
       )}
     >
@@ -106,48 +89,25 @@ function Handles() {
   );
 }
 
-function statusLabel(status: WorkStatus) {
-  switch (status) {
-    case "complete":
-      return "Done";
-    case "ready":
-      return "Ready";
-    case "blocked":
-      return "Blocked";
-    case "in_review":
-      return "In review";
-    case "in_progress":
-      return "In progress";
-    default:
-      return "Queued";
-  }
-}
+const SIZE = {
+  sm: "h-5 w-5 text-[8px]",
+  md: "h-6 w-6 text-[9px]",
+} as const;
 
-const workspaceActionTone: Record<StatusTone, string> = {
-  neutral: "bg-surface-soft text-ink-secondary",
-  ok: "bg-pale-green text-pale-green-ink",
-  warn: "bg-pale-yellow text-pale-yellow-ink",
-  danger: "bg-pale-red text-pale-red-ink",
-  info: "bg-pale-blue text-pale-blue-ink",
-};
-
-export function MemberAvatar({ member, size = "sm" }: { member: Member; size?: "sm" | "md" }) {
-  const dim = size === "md" ? "h-6 w-6 text-[9px]" : "h-5 w-5 text-[8px]";
+export function MemberAvatar({
+  member,
+  size = "sm",
+}: {
+  member: Member;
+  size?: keyof typeof SIZE;
+}) {
   return (
-    <span
+    <Avatar
+      name={member.name}
+      image={member.image}
       title={`${member.name} · ${member.role}`}
-      className={clsx(
-        "flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-surface bg-canvas font-medium leading-none text-ink",
-        dim,
-      )}
-    >
-      {member.image ? (
-        // oxlint-disable-next-line next/no-img-element
-        <img src={member.image} alt="" className="h-full w-full object-cover" />
-      ) : (
-        member.initials
-      )}
-    </span>
+      className={clsx("border border-surface", SIZE[size])}
+    />
   );
 }
 
@@ -157,31 +117,17 @@ export function MemberStack({
   max = 3,
 }: {
   members: Member[];
-  size?: "sm" | "md";
+  size?: keyof typeof SIZE;
   max?: number;
 }) {
-  const dim = size === "md" ? "h-6 w-6 text-[9px]" : "h-5 w-5 text-[8px]";
   const visible = members.slice(0, max);
   const overflow = members.length - visible.length;
 
   return (
     <div className="flex items-center">
       {visible.map((m, i) => (
-        <span
-          key={m.id}
-          title={`${m.name} · ${m.role}`}
-          className={clsx(
-            "flex items-center justify-center overflow-hidden rounded-full border border-surface bg-canvas font-medium leading-none text-ink",
-            dim,
-            i > 0 && "-ml-2.5",
-          )}
-        >
-          {m.image ? (
-            // oxlint-disable-next-line next/no-img-element
-            <img src={m.image} alt="" className="h-full w-full object-cover" />
-          ) : (
-            m.initials
-          )}
+        <span key={m.id} className={clsx(i > 0 && "-ml-2.5")}>
+          <MemberAvatar member={m} size={size} />
         </span>
       ))}
       {overflow > 0 ? (
@@ -189,7 +135,7 @@ export function MemberStack({
           title={`${overflow} more`}
           className={clsx(
             "-ml-2.5 flex items-center justify-center rounded-full border border-surface bg-surface-soft font-medium leading-none text-ink-tertiary",
-            dim,
+            SIZE[size],
           )}
         >
           +{overflow}
@@ -199,38 +145,32 @@ export function MemberStack({
   );
 }
 
-function CardNodeFooter({ members, action }: { members: Member[]; action?: ReactNode }) {
-  return (
-    <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-1 pb-2">
-      <MemberStack members={members} />
-      {action}
-    </div>
-  );
+function ToneIcon({ tone }: { tone: StatusTone }) {
+  if (tone === "ok") return <CheckCircle size={14} weight="fill" className="text-pale-green-ink" />;
+  if (tone === "danger") {
+    return <WarningCircle size={14} weight="fill" className="text-pale-red-ink" />;
+  }
+  if (tone === "warn") {
+    return <WarningCircle size={14} weight="fill" className="text-pale-yellow-ink" />;
+  }
+  return <CircleDashed size={14} weight="bold" className="text-ink-tertiary" />;
 }
 
-export function DepartmentNode({ data, selected }: NodeProps<Node<DepartmentNodeData>>) {
-  const icon =
-    data.tone === "ok" ? (
-      <CheckCircle size={14} weight="fill" className="text-pale-green-ink" />
-    ) : data.tone === "danger" ? (
-      <WarningCircle size={14} weight="fill" className="text-pale-red-ink" />
-    ) : data.tone === "warn" ? (
-      <WarningCircle size={14} weight="fill" className="text-pale-yellow-ink" />
-    ) : (
-      <CircleDashed size={14} weight="bold" className="text-ink-tertiary" />
-    );
-
+export const WorkspaceSummaryCard = memo(function WorkspaceSummaryCard({
+  data,
+  selected,
+}: NodeProps<WorkspaceSummaryNode>) {
   return (
-    <NodeShell selected={selected} width={260} className="pb-0">
+    <NodeShell selected={selected} width={260}>
       <Handles />
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-[6px] bg-surface-soft text-ink">
-            <Buildings size={14} weight="bold" />
+            <SquaresFour size={14} weight="bold" />
           </span>
-          {icon}
+          <ToneIcon tone={data.tone} />
         </div>
-        <StatusBadge tone={data.tone}>{statusLabel(data.status)}</StatusBadge>
+        <StatusBadge tone={data.tone}>{workStatusLabel(data.status)}</StatusBadge>
       </div>
 
       <h3 className="truncate text-[15px] font-medium tracking-[-0.02em] text-ink">{data.title}</h3>
@@ -246,126 +186,28 @@ export function DepartmentNode({ data, selected }: NodeProps<Node<DepartmentNode
         </div>
       ) : null}
 
-      {data.branchCount ? (
-        <p className="mt-2 flex items-center gap-1 text-[11px] text-ink-tertiary">
-          <Path size={12} weight="bold" />
-          {data.branchCount} lanes
-        </p>
-      ) : null}
-
-      <CardNodeFooter
-        members={data.members}
-        action={
-          <span
-            data-open-workspace=""
-            className="nodrag nopan inline-flex cursor-pointer items-center gap-0.5 text-[10px] font-medium text-ink hover:underline"
-          >
-            {data.openLabel ?? "Open"}
-            <ArrowRight size={11} weight="bold" />
-          </span>
-        }
-      />
-    </NodeShell>
-  );
-}
-
-function AuthorRow({ name, initials, meta }: { name?: string; initials?: string; meta?: string }) {
-  if (!name) return null;
-  return (
-    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-tertiary">
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-canvas text-[8px] font-medium text-ink">
-        {initials}
-      </span>
-      <span className="truncate text-ink-secondary">{name}</span>
-      {meta ? <span className="font-mono">· {meta}</span> : null}
-    </div>
-  );
-}
-
-export function WorkNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
-  return (
-    <NodeShell selected={selected} width={240}>
-      <Handles />
-      <div className="mb-2 flex items-center justify-between">
-        <span className="flex h-7 w-7 items-center justify-center rounded-[6px] bg-surface-soft">
-          <ListChecks size={14} weight="bold" />
-        </span>
-        {data.tone ? <StatusBadge tone={data.tone}>{data.meta ?? "Work"}</StatusBadge> : null}
-      </div>
-      <h3 className="truncate text-[13px] font-medium text-ink">{data.title}</h3>
-      {data.body ? (
-        <p className="mt-1 text-[12px] leading-relaxed text-ink-secondary">{data.body}</p>
-      ) : null}
-      <AuthorRow
-        name={data.authorName}
-        initials={data.authorInitials}
-        meta={data.meta && !data.tone ? data.meta : undefined}
-      />
-    </NodeShell>
-  );
-}
-
-export function AssetNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
-  return (
-    <NodeShell selected={selected} width={220}>
-      <Handles />
-      <div className="mb-2 flex items-center justify-between">
-        <span className="flex h-7 w-7 items-center justify-center rounded-[6px] bg-surface-soft">
-          <Cube size={14} weight="bold" />
-        </span>
-        {data.tone ? <StatusBadge tone={data.tone}>{data.meta ?? "Asset"}</StatusBadge> : null}
-      </div>
-      <h3 className="truncate text-[13px] font-medium text-ink">{data.title}</h3>
-      {data.body ? <p className="mt-1 text-[12px] text-ink-secondary">{data.body}</p> : null}
-      <div className="mt-3 h-14 rounded-[6px] border border-border bg-canvas" />
-      <AuthorRow name={data.authorName} initials={data.authorInitials} />
-    </NodeShell>
-  );
-}
-
-export function CommentNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
-  return (
-    <NodeShell selected={selected} width={230} className="bg-pale-yellow">
-      <Handles />
-      <div className="mb-1.5 flex items-center gap-1.5 text-pale-yellow-ink">
-        <ChatCircleText size={14} weight="bold" />
-        <span className="text-[11px] font-medium uppercase tracking-[0.05em]">
-          {data.label ?? "Comment"}
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pb-2 pt-1">
+        <MemberStack members={data.members} />
+        <span
+          {...{ [OPEN_WORKSPACE_ATTR]: "" }}
+          className="nodrag nopan inline-flex cursor-pointer items-center gap-0.5 text-[10px] font-medium text-ink hover:underline"
+        >
+          Open
+          <ArrowRight size={11} weight="bold" />
         </span>
       </div>
-      <p className="truncate text-[13px] leading-relaxed text-ink">{data.title}</p>
-      <AuthorRow name={data.authorName} initials={data.authorInitials} meta={data.meta} />
     </NodeShell>
   );
-}
-
-export function NoteNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
-  return (
-    <NodeShell selected={selected} width={210}>
-      <Handles />
-      <div className="mb-1.5 flex items-center gap-1.5 text-ink-secondary">
-        <NoteBlank size={14} weight="bold" />
-        <span className="text-[11px] font-medium uppercase tracking-[0.05em]">Note</span>
-      </div>
-      <p className="truncate text-[13px] leading-relaxed text-ink">{data.title}</p>
-      {data.body ? (
-        <p className="mt-1 line-clamp-3 text-[12px] leading-relaxed text-ink-secondary">
-          {data.body}
-        </p>
-      ) : null}
-      <AuthorRow name={data.authorName} initials={data.authorInitials} />
-    </NodeShell>
-  );
-}
+});
 
 function DocPreview({
   preview,
   title,
   className,
 }: {
-  preview: NonNullable<WorkspaceCardData["preview"]>;
+  preview: NonNullable<BoardCardData["preview"]>;
   title?: string;
-  className?: string;
+  className: string;
 }) {
   if (
     preview.url &&
@@ -378,14 +220,16 @@ function DocPreview({
         mime={preview.mime}
         title={title}
         size="card"
-        className={className ?? "mt-2"}
+        className={className}
       />
     );
   }
 
   if (preview.kind === "video" && preview.url) {
     return (
-      <div className="mt-2 overflow-hidden rounded-[6px] border border-border bg-canvas">
+      <div
+        className={clsx("overflow-hidden rounded-[6px] border border-border bg-canvas", className)}
+      >
         <video
           src={preview.url}
           className="h-24 w-full object-cover"
@@ -399,16 +243,16 @@ function DocPreview({
 
   if (preview.kind === "audio" && preview.url) {
     return (
-      <div className="mt-2 rounded-[6px] border border-border bg-canvas px-2 py-2">
-        <audio src={preview.url} controls preload="metadata" className="h-8 w-full" />
+      <div className={clsx("rounded-[6px] border border-border bg-canvas px-2 py-2", className)}>
+        <audio src={preview.url} controls preload="none" className="h-8 w-full" />
       </div>
     );
   }
 
   if (preview.kind === "text" && preview.text) {
     return (
-      <div className="mt-2 rounded-[6px] border border-border bg-canvas px-2.5 py-2">
-        <p className="line-clamp-4 font-mono text-[10px] leading-relaxed text-ink-secondary whitespace-pre-wrap">
+      <div className={clsx("rounded-[6px] border border-border bg-canvas px-2.5 py-2", className)}>
+        <p className="line-clamp-4 whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-ink-secondary">
           {preview.text}
         </p>
       </div>
@@ -416,67 +260,47 @@ function DocPreview({
   }
 
   return (
-    <div className="mt-2 flex h-16 items-center justify-center rounded-[6px] border border-dashed border-border bg-canvas text-[11px] text-ink-tertiary">
+    <div
+      className={clsx(
+        "flex h-16 items-center justify-center rounded-[6px] border border-dashed border-border bg-canvas text-[11px] text-ink-tertiary",
+        className,
+      )}
+    >
       {preview.mime?.split("/")[1]?.toUpperCase() || "FILE"}
     </div>
   );
 }
 
-// Attention / resolved icon — re-enable with open/resolve APIs.
-function WorkspaceActionIcon({ action }: { action: WorkspaceCardAction }) {
-  const label = action.variant === "resolved" ? "Resolved" : "Needs reply";
-  const Icon = action.variant === "resolved" ? CheckCircle : WarningCircle;
-  return (
-    <span
-      title={label}
-      aria-label={label}
-      className={clsx(
-        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
-        workspaceActionTone[action.tone],
-      )}
-    >
-      <Icon size={13} weight="fill" />
-    </span>
-  );
-}
-void WorkspaceActionIcon;
-
-// Same kind palette as the /spaces branch items: comments yellow, documents blue.
-const KIND_CHIP: Record<WorkspaceCardData["icon"], string> = {
+const KIND_CHIP: Record<BoardCardKind, string> = {
   comment: "bg-pale-yellow text-pale-yellow-ink",
   doc: "bg-pale-blue text-pale-blue-ink",
   note: "bg-surface-soft text-ink-secondary",
 };
 
-export function WorkspaceCardNode({ data, selected }: NodeProps<Node<WorkspaceCardData>>) {
-  const KindIcon =
-    data.icon === "doc" ? Cube : data.icon === "comment" ? ChatCircleText : NoteBlank;
+const KIND_ICON = { doc: Cube, comment: ChatCircleText, note: NoteBlank } as const;
+
+export const BoardCard = memo(function BoardCard({ data, selected }: NodeProps<BoardCardNode>) {
+  const KindIcon = KIND_ICON[data.icon];
   const author = data.members[0];
   const isDoc = data.icon === "doc";
-  const isComment = data.icon === "comment";
   const showTitle = data.title.trim().length > 0;
 
   return (
-    <NodeShell selected={selected} width={260} className="node-enter">
+    <NodeShell selected={selected} width={260} className="node-enter pb-3">
       <Handles />
       <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <span
-            className={clsx(
-              "inline-flex max-w-full items-center gap-1 rounded-full py-0.5 pl-1 pr-2 text-[10px] font-medium uppercase tracking-[0.05em]",
-              KIND_CHIP[data.icon],
-            )}
-          >
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface text-ink">
-              <KindIcon size={12} weight="bold" />
-            </span>
-            <span className="truncate">{data.typeLabel}</span>
+        <span
+          className={clsx(
+            "inline-flex max-w-full items-center gap-1 rounded-full py-0.5 pl-1 pr-2 text-[10px] font-medium uppercase tracking-[0.05em]",
+            KIND_CHIP[data.icon],
+          )}
+        >
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface text-ink">
+            <KindIcon size={12} weight="bold" />
           </span>
-          {/* Attention / resolved — re-enable with open/resolve APIs.
-          {data.action ? <WorkspaceActionIcon action={data.action} /> : null}
-          */}
-        </div>
-        {isComment && data.members.length > 0 ? (
+          <span className="truncate">{data.typeLabel}</span>
+        </span>
+        {data.icon === "comment" && data.members.length > 0 ? (
           <MemberStack members={data.members} size="md" max={3} />
         ) : author ? (
           <MemberAvatar member={author} size="md" />
@@ -506,65 +330,9 @@ export function WorkspaceCardNode({ data, selected }: NodeProps<Node<WorkspaceCa
           className={showTitle || !isDoc ? "mt-2" : "mt-0.5"}
         />
       ) : null}
-
-      {/* Attention callout — re-enable with open/resolve APIs.
-      {data.attention ? (
-        <p className="mt-2 rounded-[6px] bg-pale-yellow px-2 py-1.5 text-[11px] leading-snug text-pale-yellow-ink">
-          {data.attention}
-        </p>
-      ) : null}
-      */}
     </NodeShell>
   );
-}
+});
 
-export function InstructionNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
-  return (
-    <NodeShell selected={selected} width={250} className="bg-pale-blue/40">
-      <Handles />
-      <div className="mb-1.5 flex items-center gap-1.5 text-pale-blue-ink">
-        <Path size={14} weight="bold" />
-        <span className="text-[11px] font-medium uppercase tracking-[0.05em]">Instruction</span>
-      </div>
-      <h3 className="truncate text-[13px] font-medium text-ink">{data.title}</h3>
-      {data.body ? (
-        <p className="mt-1 text-[12px] leading-relaxed text-ink-secondary">{data.body}</p>
-      ) : null}
-      <AuthorRow name={data.authorName} initials={data.authorInitials} />
-    </NodeShell>
-  );
-}
-
-export function BlockerNode({ data, selected }: NodeProps<Node<ItemNodeData>>) {
-  return (
-    <NodeShell selected={selected} width={240} className="border-pale-red-ink/20 bg-pale-red">
-      <Handles />
-      <div className="mb-1.5 flex items-center gap-1.5 text-pale-red-ink">
-        <WarningCircle size={14} weight="fill" />
-        <span className="text-[11px] font-medium uppercase tracking-[0.05em]">Blocker</span>
-      </div>
-      <h3 className="truncate text-[13px] font-medium text-ink">{data.title}</h3>
-      {data.body ? (
-        <p className="mt-1.5 text-[12px] leading-relaxed text-pale-red-ink">{data.body}</p>
-      ) : null}
-      <AuthorRow name={data.authorName} initials={data.authorInitials} />
-    </NodeShell>
-  );
-}
-
-export const overviewNodeTypes = {
-  department: DepartmentNode,
-};
-
-export const branchNodeTypes = {
-  work: WorkNode,
-  asset: AssetNode,
-  comment: CommentNode,
-  note: NoteNode,
-  instruction: InstructionNode,
-  blocker: BlockerNode,
-};
-
-export const workspaceNodeTypes = {
-  board: WorkspaceCardNode,
-};
+export const overviewNodeTypes = { workspace: WorkspaceSummaryCard };
+export const boardNodeTypes = { board: BoardCard };

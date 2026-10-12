@@ -1,11 +1,11 @@
-import { notifyAgent } from "@/server/agent";
-import { getExecutionContext } from "@/server/env";
-import { findSessionWorkspace } from "@/server/workspace";
-import { clientIdFromRequest, publishNodeUpserted } from "@/server/sync/publish";
 import { addCommentToThread, getNodeDto, getNodeInWorkspace, touchProject } from "@lyzyos/db";
 import { tryCatch } from "@lyzyos/utils";
-import { NextResponse } from "next/server";
 import { z } from "zod";
+import { notifyAgent } from "@/server/agent";
+import { getExecutionContext } from "@/server/env";
+import { clientIdFromRequest, HttpError, json, readJson, route } from "@/server/http";
+import { publishSyncEvent } from "@/server/sync/publish";
+import { requireWorkspace } from "@/server/workspace";
 
 type Params = { params: Promise<{ projectId: string; workspaceId: string }> };
 
@@ -14,34 +14,16 @@ const commentSchema = z.object({
   message: z.string().trim().nonempty(),
 });
 
-export async function POST(req: Request, { params }: Params) {
+export const POST = route<Params>(async (request, { params }) => {
   const { projectId, workspaceId } = await params;
-  const [data, error] = await tryCatch(req.json());
-  if (error) {
-    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
-  }
-
-  const parsed = commentSchema.safeParse(data);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid data", details: z.treeifyError(parsed.error) },
-      { status: 400 },
-    );
-  }
-
   const [{ session, env, workspace }, ctx] = await Promise.all([
-    findSessionWorkspace({ projectId, workspaceId }),
+    requireWorkspace({ projectId, workspaceId }),
     getExecutionContext(),
   ]);
-  if (!workspace) {
-    return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  }
+  const { threadId, message } = await readJson(request, commentSchema);
 
-  const { threadId, message } = parsed.data;
   const thread = await getNodeInWorkspace(env.DB, { nodeId: threadId, workspaceId: workspace.id });
-  if (thread?.kind !== "comment") {
-    return NextResponse.json({ error: "Comment thread not found" }, { status: 404 });
-  }
+  if (thread?.kind !== "comment") throw new HttpError(404, "Comment thread not found");
 
   const [result, commentError] = await tryCatch(
     addCommentToThread(env.DB, {
@@ -51,41 +33,28 @@ export async function POST(req: Request, { params }: Params) {
       workspaceId: workspace.id,
     }),
   );
+  if (commentError || !result) throw new HttpError(500, "Failed to add comment");
 
-  if (commentError) {
-    return NextResponse.json({ error: "Failed to add comment" }, { status: 500 });
-  }
+  const [node] = await Promise.all([getNodeDto(env.DB, threadId), touchProject(env.DB, projectId)]);
+  if (!node) throw new HttpError(500, "Internal error");
 
-  if (!result) {
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
-  }
-
-  await touchProject(env.DB, projectId);
-
-  const node = await getNodeDto(env.DB, threadId);
-  if (!node) {
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
-  }
-
-  await publishNodeUpserted(env, workspace.id, node, clientIdFromRequest(req));
+  await publishSyncEvent(
+    env,
+    workspace.id,
+    { type: "node.upserted", node },
+    clientIdFromRequest(request),
+  );
 
   notifyAgent(
     env,
     {
       projectId,
-      threadId: parsed.data.threadId,
+      threadId,
       workspaceId: workspace.id,
-      message: [
-        {
-          id: result.id,
-          role: "user",
-          name: session.user.name,
-          message: parsed.data.message,
-        },
-      ],
+      message: [{ id: result.id, role: "user", name: session.user.name, message }],
     },
     ctx,
   );
 
-  return NextResponse.json({ data: node }, { status: 200 });
-}
+  return json(node);
+});

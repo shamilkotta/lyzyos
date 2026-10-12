@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useRef } from "react";
+
 export type Debounced<T extends (...args: never[]) => void> = T & {
   flush: () => void;
   cancel: () => void;
@@ -31,4 +33,26 @@ export function debounce<T extends (...args: never[]) => void>(fn: T, ms: number
   };
 
   return debounced;
+}
+
+/**
+ * Debounces `fn` for a component's lifetime: the timer is recreated when `fn` changes and any
+ * pending call is flushed (not dropped) on change or unmount. Keep `fn` stable with useCallback.
+ */
+export function useDebouncedCallback(fn: () => void, ms: number) {
+  const ref = useRef<Debounced<() => void> | null>(null);
+
+  useEffect(() => {
+    const debounced = debounce(fn, ms);
+    ref.current = debounced;
+    return () => debounced.flush();
+  }, [fn, ms]);
+
+  return useMemo(
+    () => ({
+      schedule: () => ref.current?.(),
+      flush: () => ref.current?.flush(),
+    }),
+    [],
+  );
 }
