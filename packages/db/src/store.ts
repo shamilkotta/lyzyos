@@ -439,6 +439,19 @@ export async function userHasProjectAccess(
   return Boolean(row);
 }
 
+export async function userCanSeeProject(
+  d1: D1Database,
+  args: { projectId: string; userId: string },
+) {
+  const database = db(d1);
+  const [row] = await database
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.id, args.projectId), canSeeProject(database, args.userId)))
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function addMemberToWorkspace(
   d1: D1Database,
   args: { workspaceId: string; userId: string },
