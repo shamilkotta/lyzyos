@@ -1,5 +1,6 @@
 {
   "name": "@lyzyos/auth",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "exports": {

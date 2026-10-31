@@ -1,5 +1,6 @@
 {
   "name": "sync",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {
